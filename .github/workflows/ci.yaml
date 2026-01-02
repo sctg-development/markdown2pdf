@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup libpdfium environment variable
+        run: |
+          echo "LIBPDFIUM_PATH=$(pwd)/pdfium/lib/linux" >> $GITHUB_ENV
+
+      - name: Setup Rust
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+          rustup component add rustfmt clippy
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo_home
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests (default features)
+        run: cargo test --verbose
+
+      - name: Generate coverage (Tarpaulin)
+        run: cargo tarpaulin --out Xml --output-dir coverage
+
+      - name: Upload cobertura artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/cobertura.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/cobertura.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          CODECOV_SLUG: sctg-development/markdown2pdf
+
+  docs:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+          rustup component add rustfmt clippy
+        env:
+          CARGO_HOME: ${{ runner.temp }}/cargo_home
+
+      - name: Build docs
+        run: RUSTDOCFLAGS="--static-root-path /markdown2pdf" cargo doc --no-deps --document-private-items
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: target/doc/markdown2pdf
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
