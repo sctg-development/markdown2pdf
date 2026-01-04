@@ -423,7 +423,7 @@ fn extract_text_with_to_unicode(
 fn test_markdown_tokens_contain_header() {
     // Read the test snippet file and parse tokens directly (independent of PDF encoding)
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let test_md = repo_root.join("test_snippets.md");
+    let test_md = repo_root.join("tests").join("test_snippets.md");
     let md = std::fs::read_to_string(&test_md).expect("read test_snippets.md");
 
     // Use internal lexer to ensure the header is parsed into tokens
