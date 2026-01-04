@@ -95,13 +95,15 @@ strikethrough = false
 backgroundcolor = { r = 255, g = 255, b = 255 }
 
 # Code block and inline code style (`code`)
+# By default, code blocks are rendered with a monospace font (Courier New)
+# for better readability of code snippets.
 [code]
 size = 8
 textcolor = { r = 128, g = 128, b = 128 }
 beforespacing = 0.4
 afterspacing = 0.4
 alignment = "left"
-fontfamily = "helvetica"
+fontfamily = "Courier New"  # Monospace font for code - can be customized to "Courier", "Monaco", "Consolas", etc.
 bold = false
 italic = false
 underline = false

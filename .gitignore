@@ -16,3 +16,4 @@ assets/data
 *.pdf
 
 test_*.md
+cobertura.xml

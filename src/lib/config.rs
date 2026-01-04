@@ -4,22 +4,77 @@
 //! It provides functionality to customize text styles, colors, margins and other formatting
 //! options for different Markdown elements in the generated PDF.
 //!
-//! The configuration uses TOML format with sections for different element types. The margin
-//! section controls document margins. Heading styles can be customized per level (1-3).
-//! Base text style defines the default text appearance. Emphasis sections handle italic text.
-//! Strong emphasis controls bold text styling. Code sections format code blocks and inline code.
-//! Block quote sections style quoted text. List item sections format list entries. Link and
-//! image sections control how those elements appear. A horizontal rule section styles divider lines.
+//! # Configuration Structure
 //!
-//! Each style section supports properties for customizing the appearance. Font size is specified
-//! in points. Text and background colors use RGB values. Vertical spacing after elements can be
-//! set. Text alignment options include left, center, right and justify. Font family specifies
-//! the typeface. Boolean flags control bold, italic, underline and strikethrough decorations.
+//! The configuration uses TOML format with sections for different element types:
+//! - The `margin` section controls document margins (top, right, bottom, left)
+//! - `heading.1`, `heading.2`, `heading.3` customize heading styles per level
+//! - `text` defines the default text appearance
+//! - `emphasis` handles italic text (*text* or _text_)
+//! - `strong_emphasis` controls bold text styling (**text** or __text__)
+//! - `code` formats both inline code (`code`) and code blocks (``` or ```*)
+//! - `block_quote` styles quoted text (> quote)
+//! - `list_item` formats list entries (- item or * item)
+//! - `link` controls hyperlink appearance ([text](url))
+//! - `image` styles images (![alt](url))
+//! - `table.header` and `table.cell` style table elements
+//! - A `horizontal_rule` section styles divider lines (---)
 //!
-//! The configuration can be defined in a TOML file. Basic configuration might customize heading
-//! styles with specific sizes, colors and alignment. Text styles control the base paragraph
-//! appearance. Custom emphasis styles can modify how italic and bold text renders. Link styles
-//! determine how hyperlinks are displayed.
+//! # Code Block Styling (Default: Courier New)
+//!
+//! By default, code blocks (``` or ```*) and inline code are rendered with **Courier New**,
+//! a fixed-width font suitable for displaying code. You can customize this in the TOML:
+//!
+//! ```toml
+//! [code]
+//! size = 10
+//! fontfamily = "Courier New"  # Use your preferred monospace font
+//! textcolor = { r = 100, g = 100, b = 100 }  # Dark gray
+//! backgroundcolor = { r = 245, g = 245, b = 245 }  # Light gray background
+//! beforespacing = 0.5
+//! afterspacing = 0.5
+//! ```
+//!
+//! # Style Properties
+//!
+//! Each style section supports the following properties:
+//! - `size` - Font size in points (integer)
+//! - `fontfamily` - Font family name (string). Recommended monospace fonts: "Courier New", "Courier", "Monaco", "Consolas"
+//! - `textcolor` - Text color as RGB tuple: `{ r = 0, g = 0, b = 0 }`
+//! - `backgroundcolor` - Background color as RGB tuple: `{ r = 255, g = 255, b = 255 }`
+//! - `beforespacing` - Space before element in points (float)
+//! - `afterspacing` - Space after element in points (float)
+//! - `alignment` - Text alignment: "left", "center", "right", or "justify" (string)
+//! - `bold` - Bold text (boolean)
+//! - `italic` - Italic text (boolean)
+//! - `underline` - Underlined text (boolean)
+//! - `strikethrough` - Strikethrough text (boolean)
+//!
+//! # Configuration Example
+//!
+//! A complete configuration file might look like:
+//!
+//! ```toml
+//! [margin]
+//! top = 10.0
+//! right = 10.0
+//! bottom = 10.0
+//! left = 10.0
+//!
+//! [heading.1]
+//! size = 20
+//! bold = true
+//! textcolor = { r = 0, g = 0, b = 0 }
+//!
+//! [text]
+//! size = 12
+//! alignment = "left"
+//!
+//! [code]
+//! size = 10
+//! fontfamily = "Courier New"  # Monospace font for code blocks (default)
+//! backgroundcolor = { r = 245, g = 245, b = 245 }
+//! ```
 //!
 //! The configuration processing follows a pipeline where the TOML file is parsed into style
 //! objects that control the PDF generation. The parser extracts style properties and creates
@@ -147,6 +202,9 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
 /// It processes all style sections and returns a complete StyleMatch object
 /// containing the full configuration.
 ///
+/// By default, code blocks and inline code are rendered with **Courier New** font
+/// (a fixed-width font ideal for displaying code).
+///
 /// # Arguments
 /// * `config_str` - The TOML configuration content as a string
 ///
@@ -155,21 +213,22 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
 ///
 /// # Example
 /// ```rust
-/// use markdown2pdf::config::{ConfigSource, load_config_from_source};
+/// use markdown2pdf::config::parse_config_string;
 ///
-/// // Use default configuration
-/// let style = load_config_from_source(ConfigSource::Default);
+/// // Parse configuration with custom code block styling
+/// let config = r#"
+/// [heading.1]
+/// size = 18
+/// bold = true
 ///
-/// // Load from file
-/// let style = load_config_from_source(ConfigSource::File("config.toml"));
-///
-/// // Use embedded configuration
-/// const EMBEDDED: &str = r#"
-///     [heading.1]
-///     size = 18
-///     bold = true
+/// [code]
+/// fontfamily = "Courier New"
+/// size = 10
+/// backgroundcolor = { r = 245, g = 245, b = 245 }
 /// "#;
-/// let style = load_config_from_source(ConfigSource::Embedded(EMBEDDED));
+/// let style = parse_config_string(config);
+/// assert_eq!(style.heading_1.size, 18);
+/// assert_eq!(style.code.font_family, Some("Courier New"));
 /// ```
 pub fn parse_config_string(config_str: &str) -> StyleMatch {
     let config: Value = match toml::from_str(config_str) {
@@ -238,6 +297,13 @@ pub fn parse_config_string(config_str: &str) -> StyleMatch {
 /// configuration, or embedded TOML strings. It processes all style sections and
 /// returns a complete StyleMatch object containing the full configuration.
 ///
+/// # Default Code Block Styling
+///
+/// By default, markdown code blocks (``` or ```*) and inline code (`code`) are
+/// rendered using **Courier New**, a fixed-width font ideal for displaying code.
+/// This can be customized in the TOML configuration file by specifying a different
+/// font family under the `[code]` section (e.g., "Courier", "Monaco", "Consolas").
+///
 /// # Arguments
 /// * `source` - The configuration source (Default, File, or Embedded)
 ///
@@ -248,17 +314,23 @@ pub fn parse_config_string(config_str: &str) -> StyleMatch {
 /// ```rust
 /// use markdown2pdf::config::{ConfigSource, load_config_from_source};
 ///
-/// // Use default configuration
+/// // Use default configuration (code blocks use Courier New)
 /// let style = load_config_from_source(ConfigSource::Default);
+/// assert!(style.code.font_family.is_some());
 ///
 /// // Load from file
 /// let style = load_config_from_source(ConfigSource::File("config.toml"));
 ///
-/// // Use embedded configuration
+/// // Use embedded configuration with custom code block font
 /// const EMBEDDED: &str = r#"
 ///     [heading.1]
 ///     size = 18
 ///     bold = true
+///     
+///     [code]
+///     fontfamily = "Courier New"
+///     size = 10
+///     backgroundcolor = { r = 245, g = 245, b = 245 }
 /// "#;
 /// let style = load_config_from_source(ConfigSource::Embedded(EMBEDDED));
 /// ```

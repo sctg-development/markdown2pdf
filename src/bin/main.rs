@@ -26,26 +26,22 @@ enum Verbosity {
 fn get_markdown_input(matches: &clap::ArgMatches) -> Result<String, AppError> {
     if let Some(file_path) = matches.get_one::<String>("path") {
         fs::read_to_string(file_path).map_err(|e| AppError::FileReadError(e))
-    } else if let Some(_url) = matches.get_one::<String>("url") {
+    } else {
         #[cfg(feature = "fetch")]
-        {
-            Client::new()
+        if let Some(_url) = matches.get_one::<String>("url") {
+            return Client::new()
                 .get(_url)
                 .send()
                 .map_err(|e| AppError::NetworkError(e.to_string()))?
                 .text()
-                .map_err(|e| AppError::NetworkError(e.to_string()))
+                .map_err(|e| AppError::NetworkError(e.to_string()));
         }
-        #[cfg(not(feature = "fetch"))]
-        {
-            Err(AppError::ConversionError(
-                "URL fetching is not enabled. Please rebuild with --features fetch or --features native-tls".to_string()
-            ))
+
+        if let Some(markdown_string) = matches.get_one::<String>("string") {
+            Ok(markdown_string.to_string())
+        } else {
+            Err(AppError::ConversionError("No input provided".to_string()))
         }
-    } else if let Some(markdown_string) = matches.get_one::<String>("string") {
-        Ok(markdown_string.to_string())
-    } else {
-        Err(AppError::ConversionError("No input provided".to_string()))
     }
 }
 
@@ -203,14 +199,81 @@ fn main() {
             markdown2pdf -p doc.md --verbose --dry-run\n  \
             markdown2pdf -p unicode.md --default-font \"Arial\" --fallback-font \"Noto Sans\"\n",
         )
-        .arg(
-            Arg::new("path")
+        .arg({
+            let arg = Arg::new("path")
                 .short('p')
                 .long("path")
                 .value_name("FILE_PATH")
-                .help("Path to the markdown file")
-                .conflicts_with_all(["string", "url"]),
-        );
+                .help("Path to the markdown file");
+            #[cfg(feature = "fetch")]
+            let arg = arg.conflicts_with_all(["string", "url"]);
+            #[cfg(not(feature = "fetch"))]
+            let arg = arg.conflicts_with("string");
+            arg
+        });
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use clap::Arg;
+        use clap::Command;
+        use std::env;
+        use std::fs;
+
+        #[test]
+        fn test_get_output_path_default_and_custom() {
+            // Default
+            let cmd = Command::new("test").arg(Arg::new("output").short('o').long("output"));
+            let matches = cmd.clone().get_matches_from(vec!["test"]);
+            let default_path = get_output_path(&matches).unwrap();
+            assert!(default_path.ends_with("output.pdf"));
+
+            // Custom
+            let matches = cmd.get_matches_from(vec!["test", "-o", "my.pdf"]);
+            let custom_path = get_output_path(&matches).unwrap();
+            assert!(custom_path.ends_with("my.pdf"));
+        }
+
+        #[test]
+        fn test_get_markdown_input_from_string_and_file() {
+            // From string
+            let cmd = Command::new("test").arg(
+                Arg::new("string")
+                    .short('s')
+                    .long("string")
+                    .value_name("MARKDOWN_STRING"),
+            );
+            let matches = cmd.clone().get_matches_from(vec!["test", "-s", "# Hello"]);
+            let s = get_markdown_input(&matches).unwrap();
+            assert!(s.contains("Hello"));
+
+            // From file
+            let tmp = env::temp_dir().join("md_test_input.md");
+            fs::write(&tmp, "# From file").unwrap();
+            let cmd = Command::new("test").arg(Arg::new("path").short('p').long("path"));
+            let matches = cmd.get_matches_from(vec!["test", "-p", tmp.to_str().unwrap()]);
+            let s = get_markdown_input(&matches).unwrap();
+            assert!(s.contains("From file"));
+            let _ = fs::remove_file(&tmp);
+        }
+
+        #[test]
+        fn test_run_dry_run_returns_ok() {
+            let tmp = env::temp_dir().join("md_test_run.md");
+            fs::write(&tmp, "# Small").unwrap();
+
+            let cmd = Command::new("test")
+                .arg(Arg::new("path").short('p').long("path"))
+                .arg(Arg::new("dry-run").long("dry-run"));
+
+            let matches =
+                cmd.get_matches_from(vec!["test", "-p", tmp.to_str().unwrap(), "--dry-run"]);
+            // run() returns Ok on dry-run when no warnings
+            let res = run(matches);
+            let _ = fs::remove_file(&tmp);
+            assert!(res.is_ok());
+        }
+    }
 
     #[cfg(feature = "fetch")]
     let cmd = cmd.arg(
@@ -223,14 +286,18 @@ fn main() {
     );
 
     let mut cmd = cmd
-        .arg(
-            Arg::new("string")
+        .arg({
+            let arg = Arg::new("string")
                 .short('s')
                 .long("string")
                 .value_name("MARKDOWN_STRING")
-                .help("Markdown content as a string")
-                .conflicts_with_all(["path", "url"]),
-        )
+                .help("Markdown content as a string");
+            #[cfg(feature = "fetch")]
+            let arg = arg.conflicts_with_all(["path", "url"]);
+            #[cfg(not(feature = "fetch"))]
+            let arg = arg.conflicts_with("path");
+            arg
+        })
         .arg(
             Arg::new("output")
                 .short('o')

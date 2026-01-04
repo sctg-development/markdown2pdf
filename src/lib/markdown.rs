@@ -41,7 +41,7 @@
 //!         ├── text: String
 //!         └── url: String
 
-use genpdfi::Alignment;
+use genpdfi_extended::Alignment;
 /// Parsing context — determines which tokens are valid in the current location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseContext {
@@ -89,6 +89,11 @@ pub enum Token {
     TableAlignment(Alignment),
     /// HTML comment content
     HtmlComment(String),
+    /// LaTeX math block (inline $...$ or display $$...$$)
+    Math {
+        content: String,
+        display: bool, // true for $$...$$, false for $...$
+    },
     /// Line break
     Newline,
     /// Horizontal rule (---)
@@ -177,6 +182,9 @@ impl Token {
             }
             Token::TableAlignment(_) => {
                 // These don't contain text
+            }
+            Token::Math { content, .. } => {
+                result.push_str(content);
             }
         }
     }
@@ -323,6 +331,8 @@ impl Lexer {
             '*' if is_line_start && allow_block_tokens(ctx) && self.is_list_marker('*') => {
                 self.parse_list_item(false, 0, ctx)?
             }
+            // Check for math blocks before emphasis ($ must come before * and _)
+            '$' => self.parse_math()?,
             '*' | '_' => self.parse_emphasis()?,
             '`' => self.parse_code()?,
             '>' if is_line_start && allow_block_tokens(ctx) => self.parse_blockquote()?,
@@ -378,15 +388,40 @@ impl Lexer {
 
     /// Parses emphasis tokens (* or _) with support for multiple levels (1-3).
     /// Ensures proper matching of opening and closing delimiters.
+    /// Follows CommonMark rules: underscore emphasis requires flanking whitespace/punctuation.
     fn parse_emphasis(&mut self) -> Result<Token, LexerError> {
         let start_pos = self.position;
         let delimiter = self.current_char();
+
+        // For underscore emphasis, check CommonMark flanking rules
+        // An underscore delimiter run can start emphasis only if:
+        // - preceded by whitespace, punctuation, or start of line
+        // - followed by non-whitespace
+        if delimiter == '_' {
+            // Check if preceded by alphanumeric (not valid for underscore emphasis)
+            if start_pos > 0 {
+                let prev_char = self.input[start_pos - 1];
+                if prev_char.is_alphanumeric() {
+                    // This underscore is part of an identifier like "T_ACT", treat as text
+                    self.advance();
+                    return Ok(Token::Text("_".to_string()));
+                }
+            }
+        }
+
         let mut level = 0;
 
         // Count the number of delimiters
         while self.current_char() == delimiter {
             level += 1;
             self.advance();
+        }
+
+        // Check if followed by whitespace (invalid emphasis start)
+        if self.position < self.input.len() && self.current_char().is_whitespace() {
+            // Not a valid emphasis start, return as text
+            let text = std::iter::repeat(delimiter).take(level).collect::<String>();
+            return Ok(Token::Text(text));
         }
 
         let mut content = self.parse_nested_content(|c| c == delimiter, ParseContext::Inline)?;
@@ -467,6 +502,80 @@ impl Lexer {
             self.advance();
         }
         count
+    }
+
+    /// Parses LaTeX math blocks ($...$ for inline, $$...$$ for display)
+    fn parse_math(&mut self) -> Result<Token, LexerError> {
+        let start_pos = self.position;
+
+        // Check if it's a display math block ($$)
+        let display = self.position + 1 < self.input.len() && self.input[self.position + 1] == '$';
+
+        if display {
+            // Skip opening $$
+            self.advance();
+            self.advance();
+
+            let mut content = String::new();
+
+            // Read until closing $$
+            while self.position < self.input.len() {
+                if self.current_char() == '$'
+                    && self.position + 1 < self.input.len()
+                    && self.input[self.position + 1] == '$'
+                {
+                    // Skip closing $$
+                    self.advance();
+                    self.advance();
+                    return Ok(Token::Math {
+                        content: content.trim().to_string(),
+                        display: true,
+                    });
+                }
+                content.push(self.current_char());
+                self.advance();
+            }
+
+            // Unclosed display math - treat as text
+            self.position = start_pos;
+            self.advance(); // Skip first $
+            Ok(Token::Text("$".to_string()))
+        } else {
+            // Inline math ($...$)
+            self.advance(); // Skip opening $
+
+            let mut content = String::new();
+
+            // Read until closing $
+            while self.position < self.input.len() {
+                let ch = self.current_char();
+
+                // Check for closing $ (not followed by another $)
+                if ch == '$' {
+                    self.advance(); // Skip closing $
+                    return Ok(Token::Math {
+                        content,
+                        display: false,
+                    });
+                }
+
+                // Don't allow newlines in inline math
+                if ch == '\n' {
+                    // Unclosed inline math - treat as text
+                    self.position = start_pos;
+                    self.advance();
+                    return Ok(Token::Text("$".to_string()));
+                }
+
+                content.push(ch);
+                self.advance();
+            }
+
+            // Unclosed inline math - treat as text
+            self.position = start_pos;
+            self.advance();
+            Ok(Token::Text("$".to_string()))
+        }
     }
 
     /// Parses a blockquote, collecting text until newline
@@ -634,10 +743,13 @@ impl Lexer {
     fn is_start_of_special_token(&self, ctx: ParseContext) -> bool {
         let ch = self.current_char();
         match ch {
-            '#' if matches!(ctx, ParseContext::Root) => true,
+            // # is only special at line start in Root context
+            '#' if matches!(ctx, ParseContext::Root) && self.is_at_line_start() => true,
 
-            // inline-compatible tokens
-            '*' | '_' | '`' | '[' => true,
+            // Underscore can be a closing delimiter even if preceded by alphanumeric
+            // (e.g., the final _ in "word_")
+            // Opening emphasis rules are checked separately in parse_emphasis()
+            '_' | '*' | '`' | '[' | '$' => true,
 
             '!' => {
                 if self.position + 1 < self.input.len() {

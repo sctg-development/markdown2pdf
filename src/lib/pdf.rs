@@ -16,11 +16,19 @@
 //! The module is designed to be both robust for production use and flexible enough to accommodate various document structures
 //! and styling needs.
 
-use crate::{fonts::load_unicode_system_font, styling::StyleMatch, Token};
-use genpdfi::{
+use crate::{fonts::load_unicode_system_font, highlighting, styling::StyleMatch, Token};
+use genpdfi_extended::{
     fonts::{FontData, FontFamily},
     Alignment, Document,
 };
+use std::cell::RefCell;
+
+thread_local! {
+    /// Thread-local storage for the current code font override during rendering
+    /// This allows passing the code font through the rendering call stack without
+    /// major structural changes.
+    static CURRENT_CODE_FONT_OVERRIDE: RefCell<Option<genpdfi_extended::fonts::FontFamily<genpdfi_extended::fonts::Font>>> = RefCell::new(None);
+}
 
 /// The main PDF document generator that orchestrates the conversion process from markdown to PDF.
 /// This struct serves as the central coordinator for document generation, managing the overall
@@ -37,8 +45,8 @@ pub struct Pdf {
     style: StyleMatch,
     font_family: FontFamily<FontData>,
     code_font_family: FontFamily<FontData>,
-    font_fallback_chain: Option<FontFamily<genpdfi::fonts::FontFallbackChain>>,
-    code_font_fallback_chain: Option<FontFamily<genpdfi::fonts::FontFallbackChain>>,
+    font_fallback_chain: Option<FontFamily<genpdfi_extended::fonts::FontFallbackChain>>,
+    code_font_fallback_chain: Option<FontFamily<genpdfi_extended::fonts::FontFallbackChain>>,
 }
 
 impl Pdf {
@@ -164,7 +172,7 @@ impl Pdf {
         // For code blocks we prefer a monospace font (use config override or default to courier)
         let code_font_name = font_config
             .and_then(|cfg| cfg.code_font.as_deref())
-            .unwrap_or("courier");
+            .unwrap_or("space mono");
 
         let code_font_family =
             crate::fonts::load_font_with_config(code_font_name, font_config, all_text.as_deref())
@@ -173,7 +181,7 @@ impl Pdf {
                         "Warning: could not load code font '{}', falling back to Courier",
                         code_font_name
                     );
-                    crate::fonts::load_builtin_font_family("courier")
+                    crate::fonts::load_builtin_font_family("space mono")
                         .expect("Failed to load fallback code font family")
                 });
 
@@ -190,7 +198,7 @@ impl Pdf {
     /// Finalizes and outputs the processed document to a PDF file at the specified path.
     /// Provides comprehensive error handling to catch and report any issues during the
     /// final rendering phase.
-    pub fn render(document: genpdfi::Document, path: &str) -> Option<String> {
+    pub fn render(document: genpdfi_extended::Document, path: &str) -> Option<String> {
         match document.render_to_file(path) {
             Ok(_) => None,
             Err(err) => Some(err.to_string()),
@@ -220,7 +228,7 @@ impl Pdf {
     /// // Use the bytes as needed (save, send, etc.)
     /// assert!(!pdf_bytes.is_empty());
     /// ```
-    pub fn render_to_bytes(document: genpdfi::Document) -> Result<Vec<u8>, String> {
+    pub fn render_to_bytes(document: genpdfi_extended::Document) -> Result<Vec<u8>, String> {
         let mut buffer = std::io::Cursor::new(Vec::new());
         match document.render(&mut buffer) {
             Ok(_) => Ok(buffer.into_inner()),
@@ -243,10 +251,10 @@ impl Pdf {
     /// - Base font size
     /// - Content processing and rendering
     pub fn render_into_document(&self) -> Document {
-        let mut doc = genpdfi::Document::new(self.font_family.clone());
-        let mut decorator = genpdfi::SimplePageDecorator::new();
+        let mut doc = genpdfi_extended::Document::new(self.font_family.clone());
+        let mut decorator = genpdfi_extended::SimplePageDecorator::new();
 
-        decorator.set_margins(genpdfi::Margins::trbl(
+        decorator.set_margins(genpdfi_extended::Margins::trbl(
             self.style.margins.top,
             self.style.margins.right,
             self.style.margins.bottom,
@@ -256,7 +264,21 @@ impl Pdf {
         doc.set_page_decorator(decorator);
         doc.set_font_size(self.style.text.size);
 
+        // Add code font to the document's font cache for use in code blocks
+        let code_font = doc.add_font_family(self.code_font_family.clone());
+
+        // Store it in thread-local storage for access in render_highlighted_line
+        CURRENT_CODE_FONT_OVERRIDE.with(|f| {
+            *f.borrow_mut() = Some(code_font);
+        });
+
         self.process_tokens(&mut doc);
+
+        // Clean up thread-local storage after rendering
+        CURRENT_CODE_FONT_OVERRIDE.with(|f| {
+            *f.borrow_mut() = None;
+        });
+
         doc
     }
 
@@ -302,7 +324,7 @@ impl Pdf {
                 Token::HorizontalRule => {
                     self.flush_paragraph(doc, &current_tokens);
                     current_tokens.clear();
-                    doc.push(genpdfi::elements::Break::new(
+                    doc.push(genpdfi_extended::elements::Break::new(
                         self.style.horizontal_rule.after_spacing,
                     ));
                 }
@@ -340,13 +362,15 @@ impl Pdf {
             return;
         }
 
-        doc.push(genpdfi::elements::Break::new(
+        doc.push(genpdfi_extended::elements::Break::new(
             self.style.text.before_spacing,
         ));
-        let mut para = genpdfi::elements::Paragraph::default();
+        let mut para = genpdfi_extended::elements::Paragraph::default();
         self.render_inline_content(&mut para, tokens);
         doc.push(para);
-        doc.push(genpdfi::elements::Break::new(self.style.text.after_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.text.after_spacing,
+        ));
     }
 
     /// Renders a heading with the appropriate level styling.
@@ -361,10 +385,12 @@ impl Pdf {
             2 => &self.style.heading_2,
             3 | _ => &self.style.heading_3,
         };
-        doc.push(genpdfi::elements::Break::new(heading_style.before_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            heading_style.before_spacing,
+        ));
 
-        let mut para = genpdfi::elements::Paragraph::default();
-        let mut style = genpdfi::style::Style::new().with_font_size(heading_style.size);
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+        let mut style = genpdfi_extended::style::Style::new().with_font_size(heading_style.size);
 
         if heading_style.bold {
             style = style.bold();
@@ -373,12 +399,16 @@ impl Pdf {
             style = style.italic();
         }
         if let Some(color) = heading_style.text_color {
-            style = style.with_color(genpdfi::style::Color::Rgb(color.0, color.1, color.2));
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(
+                color.0, color.1, color.2,
+            ));
         }
 
         self.render_inline_content_with_style(&mut para, content, style);
         doc.push(para);
-        doc.push(genpdfi::elements::Break::new(heading_style.after_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            heading_style.after_spacing,
+        ));
     }
 
     /// Renders inline content with a specified style.
@@ -389,9 +419,9 @@ impl Pdf {
     /// the base style properties.
     fn render_inline_content_with_style(
         &self,
-        para: &mut genpdfi::elements::Paragraph,
+        para: &mut genpdfi_extended::elements::Paragraph,
         tokens: &[Token],
-        style: genpdfi::style::Style,
+        style: genpdfi_extended::style::Style,
     ) {
         for token in tokens {
             match token {
@@ -414,16 +444,18 @@ impl Pdf {
                 Token::Link(text, url) => {
                     let mut link_style = style.clone();
                     if let Some(color) = self.style.link.text_color {
-                        link_style = link_style
-                            .with_color(genpdfi::style::Color::Rgb(color.0, color.1, color.2));
+                        link_style = link_style.with_color(genpdfi_extended::style::Color::Rgb(
+                            color.0, color.1, color.2,
+                        ));
                     }
                     para.push_link(text.clone(), url.clone(), link_style);
                 }
                 Token::Code(_, content) => {
                     let mut code_style = style.clone();
                     if let Some(color) = self.style.code.text_color {
-                        code_style = code_style
-                            .with_color(genpdfi::style::Color::Rgb(color.0, color.1, color.2));
+                        code_style = code_style.with_color(genpdfi_extended::style::Color::Rgb(
+                            color.0, color.1, color.2,
+                        ));
                     }
                     para.push_styled(content.clone(), code_style);
                 }
@@ -437,8 +469,12 @@ impl Pdf {
     /// This is a convenience method that wraps render_inline_content_with_style,
     /// using the default text style configuration. It applies the configured font size
     /// to the content before rendering.
-    fn render_inline_content(&self, para: &mut genpdfi::elements::Paragraph, tokens: &[Token]) {
-        let style = genpdfi::style::Style::new().with_font_size(self.style.text.size);
+    fn render_inline_content(
+        &self,
+        para: &mut genpdfi_extended::elements::Paragraph,
+        tokens: &[Token],
+    ) {
+        let style = genpdfi_extended::style::Style::new().with_font_size(self.style.text.size);
         self.render_inline_content_with_style(para, tokens, style);
     }
 
@@ -447,23 +483,92 @@ impl Pdf {
     /// This method handles multi-line code blocks, rendering each line as a separate
     /// paragraph with the configured code style. It applies the code font size and
     /// text color settings, and adds the configured spacing after the block.
-    fn render_code_block(&self, doc: &mut Document, _lang: &str, content: &str) {
-        doc.push(genpdfi::elements::Break::new(
+    fn render_code_block(&self, doc: &mut Document, lang: &str, content: &str) {
+        doc.push(genpdfi_extended::elements::Break::new(
             self.style.code.before_spacing,
         ));
 
-        let mut style = genpdfi::style::Style::new().with_font_size(self.style.code.size);
-        if let Some(color) = self.style.code.text_color {
-            style = style.with_color(genpdfi::style::Color::Rgb(color.0, color.1, color.2));
-        }
+        // Get syntax highlighted tokens
+        let highlighted_tokens = highlighting::highlight_code(content, lang);
 
         let indent = "    "; // TODO: make this configurable from style match.
-        for line in content.split('\n') {
-            let mut para = genpdfi::elements::Paragraph::default();
-            para.push_styled(format!("{}{}", indent, line), style.clone());
-            doc.push(para);
+        let mut current_line = String::new();
+        let mut line_tokens = Vec::new();
+
+        for token in highlighted_tokens {
+            // Check if we need to flush current line
+            if token.text.contains('\n') {
+                // Add remaining text before newline
+                let parts: Vec<&str> = token.text.split('\n').collect();
+                for (i, part) in parts.iter().enumerate() {
+                    if i > 0 {
+                        // Render previous line and start new one
+                        self.render_highlighted_line(doc, indent, &line_tokens);
+                        line_tokens.clear();
+                        current_line.clear();
+                    }
+                    if !part.is_empty() {
+                        line_tokens.push((part.to_string(), token.color, token.bold, token.italic));
+                        current_line.push_str(part);
+                    }
+                }
+            } else {
+                line_tokens.push((token.text.clone(), token.color, token.bold, token.italic));
+                current_line.push_str(&token.text);
+            }
         }
-        doc.push(genpdfi::elements::Break::new(self.style.code.after_spacing));
+
+        // Render final line if there's any content
+        if !line_tokens.is_empty() {
+            self.render_highlighted_line(doc, indent, &line_tokens);
+        }
+
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.code.after_spacing,
+        ));
+    }
+
+    /// Renders a single line of highlighted code
+    fn render_highlighted_line(
+        &self,
+        doc: &mut Document,
+        indent: &str,
+        tokens: &[(String, highlighting::HighlightColor, bool, bool)],
+    ) {
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+
+        // Create base code style with font override
+        let mut code_style =
+            genpdfi_extended::style::Style::new().with_font_size(self.style.code.size);
+
+        // Apply code font override if available
+        CURRENT_CODE_FONT_OVERRIDE.with(|f| {
+            if let Some(code_font) = f.borrow().as_ref() {
+                code_style = code_style.with_font_override(*code_font);
+            }
+        });
+
+        // Add indentation
+        let mut style = code_style;
+        if let Some(color) = self.style.code.text_color {
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(
+                color.0, color.1, color.2,
+            ));
+        }
+        para.push_styled(indent.to_string(), style);
+
+        // Add colored tokens
+        for (text, color, _bold, _italic) in tokens {
+            let mut token_style = code_style;
+            let (r, g, b) = color.as_rgb_u8();
+            token_style = token_style.with_color(genpdfi_extended::style::Color::Rgb(r, g, b));
+
+            // Note: genpdfi doesn't support bold/italic in its current version,
+            // so we only apply the color for now
+            para.push_styled(text.clone(), token_style);
+        }
+
+        doc.push(para);
     }
 
     /// Renders a list item with appropriate styling and formatting.
@@ -489,11 +594,11 @@ impl Pdf {
         number: Option<usize>,
         nesting_level: usize,
     ) {
-        doc.push(genpdfi::elements::Break::new(
+        doc.push(genpdfi_extended::elements::Break::new(
             self.style.list_item.before_spacing,
         ));
-        let mut para = genpdfi::elements::Paragraph::default();
-        let style = genpdfi::style::Style::new().with_font_size(self.style.list_item.size);
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+        let style = genpdfi_extended::style::Style::new().with_font_size(self.style.list_item.size);
 
         let indent = "    ".repeat(nesting_level);
         if !ordered {
@@ -509,7 +614,7 @@ impl Pdf {
             .collect();
         self.render_inline_content_with_style(&mut para, &inline_content, style);
         doc.push(para);
-        doc.push(genpdfi::elements::Break::new(
+        doc.push(genpdfi_extended::elements::Break::new(
             self.style.list_item.after_spacing,
         ));
 
@@ -545,23 +650,24 @@ impl Pdf {
         aligns: &Vec<Alignment>,
         rows: &Vec<Vec<Vec<Token>>>,
     ) {
-        doc.push(genpdfi::elements::Break::new(
+        doc.push(genpdfi_extended::elements::Break::new(
             self.style.text.before_spacing,
         ));
 
         let column_count = headers.len();
         let column_weights = vec![1; column_count];
 
-        let mut table = genpdfi::elements::TableLayout::new(column_weights);
-        table.set_cell_decorator(genpdfi::elements::FrameCellDecorator::new(
+        let mut table = genpdfi_extended::elements::TableLayout::new(column_weights);
+        table.set_cell_decorator(genpdfi_extended::elements::FrameCellDecorator::new(
             true, true, false,
         ));
 
         // Render header row
         let mut header_row = table.row();
         for (i, header_cell) in headers.iter().enumerate() {
-            let mut para = genpdfi::elements::Paragraph::default();
-            let style = genpdfi::style::Style::new().with_font_size(self.style.table_header.size);
+            let mut para = genpdfi_extended::elements::Paragraph::default();
+            let style =
+                genpdfi_extended::style::Style::new().with_font_size(self.style.table_header.size);
 
             if let Some(align) = aligns.get(i) {
                 para.set_alignment(*align);
@@ -581,8 +687,9 @@ impl Pdf {
             let mut table_row = table.row();
 
             for (i, cell_tokens) in row.iter().enumerate() {
-                let mut para = genpdfi::elements::Paragraph::default();
-                let style = genpdfi::style::Style::new().with_font_size(self.style.table_cell.size);
+                let mut para = genpdfi_extended::elements::Paragraph::default();
+                let style = genpdfi_extended::style::Style::new()
+                    .with_font_size(self.style.table_cell.size);
 
                 if let Some(align) = aligns.get(i) {
                     para.set_alignment(*align);
@@ -599,7 +706,9 @@ impl Pdf {
         }
 
         doc.push(table);
-        doc.push(genpdfi::elements::Break::new(self.style.text.after_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.text.after_spacing,
+        ));
     }
 }
 

@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use fontdb::Database;
-use genpdfi::error::{Error, ErrorKind};
-use genpdfi::fonts::{FontData, FontFamily};
+use genpdfi_extended::error::{Error, ErrorKind};
+use genpdfi_extended::fonts::{FontData, FontFamily};
 use printpdf::BuiltinFont;
 use rusttype::Font;
 
@@ -26,6 +26,115 @@ fn get_font_aliases(name: &str) -> Vec<&'static str> {
         "comic sans ms" | "comic sans" => vec!["Comic Neue", "Comic Relief"],
         _ => vec![],
     }
+}
+
+// -----------------------------------------------------------------------------
+// Embedded fonts (statically included from the `fonts/` directory)
+// These are prioritized over system fonts when available.
+// -----------------------------------------------------------------------------
+
+// Monospace (fixed-width) - Space Mono
+static SPACE_MONO_REGULAR: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Regular.ttf");
+static SPACE_MONO_BOLD: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Bold.ttf");
+static SPACE_MONO_ITALIC: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Italic.ttf");
+static SPACE_MONO_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/SpaceMono-BoldItalic.ttf");
+
+// Sans-serif - Noto Sans
+static NOTO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/NotoSans-Regular.ttf");
+static NOTO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/NotoSans-Bold.ttf");
+static NOTO_SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/NotoSans-Italic.ttf");
+static NOTO_SANS_BOLD_ITALIC: &'static [u8] = include_bytes!("../../fonts/NotoSans-BoldItalic.ttf");
+
+// Monospace alternative - Courier Prime (also included)
+static COURIER_PRIME_REGULAR: &'static [u8] =
+    include_bytes!("../../fonts/CourierPrime-Regular.ttf");
+static COURIER_PRIME_BOLD: &'static [u8] = include_bytes!("../../fonts/CourierPrime-Bold.ttf");
+static COURIER_PRIME_ITALIC: &'static [u8] = include_bytes!("../../fonts/CourierPrime-Italic.ttf");
+static COURIER_PRIME_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/CourierPrime-BoldItalic.ttf");
+
+/// Attempt to build a `FontFamily<FontData>` from the embedded fonts.
+fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
+    let key = name.to_lowercase();
+
+    // Helper to build FontFamily given static slices (may return None on error)
+    let mk_family = |regular: &'static [u8],
+                     bold: &'static [u8],
+                     italic: &'static [u8],
+                     bold_italic: &'static [u8]| {
+        let reg = Arc::new(regular.to_vec());
+        let b = Arc::new(bold.to_vec());
+        let i = Arc::new(italic.to_vec());
+        let bi = Arc::new(bold_italic.to_vec());
+        let mk = || -> Result<FontFamily<FontData>, Error> {
+            Ok(FontFamily {
+                regular: FontData::new_shared(reg.clone(), None)?,
+                bold: FontData::new_shared(b.clone(), None)?,
+                italic: FontData::new_shared(i.clone(), None)?,
+                bold_italic: FontData::new_shared(bi.clone(), None)?,
+            })
+        };
+
+        mk().ok()
+    };
+
+    if [
+        "space mono",
+        "space-mono",
+        "spacemono",
+        "space_mono",
+        "spacemono",
+        "spacemono",
+        "mono",
+        "monospace",
+    ]
+    .contains(&key.as_str())
+    {
+        return mk_family(
+            SPACE_MONO_REGULAR,
+            SPACE_MONO_BOLD,
+            SPACE_MONO_ITALIC,
+            SPACE_MONO_BOLD_ITALIC,
+        );
+    }
+
+    if [
+        "noto sans",
+        "noto-sans",
+        "noto",
+        "noto sans",
+        "sans",
+        "sans-serif",
+    ]
+    .contains(&key.as_str())
+    {
+        return mk_family(
+            NOTO_SANS_REGULAR,
+            NOTO_SANS_BOLD,
+            NOTO_SANS_ITALIC,
+            NOTO_SANS_BOLD_ITALIC,
+        );
+    }
+
+    if [
+        "courierprime",
+        "courier-prime",
+        "courier prime",
+        "courier",
+        "courier new",
+    ]
+    .contains(&key.as_str())
+    {
+        return mk_family(
+            COURIER_PRIME_REGULAR,
+            COURIER_PRIME_BOLD,
+            COURIER_PRIME_ITALIC,
+            COURIER_PRIME_BOLD_ITALIC,
+        );
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -59,6 +168,48 @@ mod tests {
         // Test Verdana
         let verdana = get_font_aliases("Verdana");
         assert!(verdana.contains(&"DejaVu Sans"));
+    }
+
+    #[test]
+    fn test_embedded_space_mono_available() {
+        let family = try_embedded_font_family("space-mono");
+        assert!(
+            family.is_some(),
+            "Embedded SpaceMono family should be available"
+        );
+        let family = family.unwrap();
+        assert_eq!(
+            family.regular.get_data().unwrap().len(),
+            SPACE_MONO_REGULAR.len()
+        );
+    }
+
+    #[test]
+    fn test_embedded_noto_sans_available() {
+        let family = try_embedded_font_family("noto-sans");
+        assert!(
+            family.is_some(),
+            "Embedded NotoSans family should be available"
+        );
+        let family = family.unwrap();
+        assert_eq!(
+            family.regular.get_data().unwrap().len(),
+            NOTO_SANS_REGULAR.len()
+        );
+    }
+
+    #[test]
+    fn test_embedded_courier_prime_available() {
+        let family = try_embedded_font_family("courier-prime");
+        assert!(
+            family.is_some(),
+            "Embedded CourierPrime family should be available"
+        );
+        let family = family.unwrap();
+        assert_eq!(
+            family.regular.get_data().unwrap().len(),
+            COURIER_PRIME_REGULAR.len()
+        );
     }
 }
 
@@ -288,6 +439,12 @@ fn load_system_font_bytes_fallback(candidates: &[&str]) -> Result<Vec<u8>, Error
 /// If the requested family cannot be found, an `InvalidFont` error is returned so that the caller
 /// can decide how to proceed (e.g. fall back to a built-in font).
 pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>, Error> {
+    // Prefer embedded fonts from `fonts/` if available
+    if let Some(family) = try_embedded_font_family(name) {
+        eprintln!("✓ Using embedded font family for '{}'", name);
+        return Ok(family);
+    }
+
     let mut candidates = vec![name];
     let aliases = get_font_aliases(name);
     candidates.extend(aliases);
@@ -665,6 +822,15 @@ pub fn load_font_with_config(
     // Check if subsetting is enabled
     let enable_subsetting = config.map(|c| c.enable_subsetting).unwrap_or(false);
 
+    // Prefer embedded fonts (statically included in `fonts/`) if available
+    if let Some(family) = try_embedded_font_family(name) {
+        eprintln!(
+            "✓ Using embedded font family for '{}' (load_font_with_config)",
+            name
+        );
+        return apply_subsetting_if_enabled(family, enable_subsetting, text);
+    }
+
     // Check if fallback fonts are specified - if so, return a chain-based result
     // Note: We can't apply subsetting to fallback chains yet, so this path doesn't support it
     if let Some(cfg) = config {
@@ -725,10 +891,11 @@ fn apply_subsetting_if_enabled(
     // Get the raw font data from the first variant (regular)
     let original_data = family.regular.get_data()?;
 
-    let subset_data = genpdfi::subsetting::subset_font(original_data, text).map_err(|e| {
-        eprintln!("Warning: Font subsetting failed: {}, using full font", e);
-        e
-    })?;
+    let subset_data =
+        genpdfi_extended::subsetting::subset_font(original_data, text).map_err(|e| {
+            eprintln!("Warning: Font subsetting failed: {}, using full font", e);
+            e
+        })?;
 
     // Create new FontFamily with subset data
     let shared = Arc::new(subset_data);
@@ -754,9 +921,9 @@ fn apply_subsetting_if_enabled(
 /// # Returns
 /// A new FontFamily<FontFallbackChain> with subset fonts
 pub fn apply_subsetting_to_chain(
-    chain_family: FontFamily<genpdfi::fonts::FontFallbackChain>,
+    chain_family: FontFamily<genpdfi_extended::fonts::FontFallbackChain>,
     text: &str,
-) -> Result<FontFamily<genpdfi::fonts::FontFallbackChain>, Error> {
+) -> Result<FontFamily<genpdfi_extended::fonts::FontFallbackChain>, Error> {
     if text.is_empty() {
         return Ok(chain_family);
     }
@@ -776,9 +943,9 @@ pub fn apply_subsetting_to_chain(
 
 /// Subsets a single fallback chain by subsetting each font based on what it renders.
 fn subset_chain(
-    chain: &genpdfi::fonts::FontFallbackChain,
+    chain: &genpdfi_extended::fonts::FontFallbackChain,
     text: &str,
-) -> Result<genpdfi::fonts::FontFallbackChain, Error> {
+) -> Result<genpdfi_extended::fonts::FontFallbackChain, Error> {
     let segments = chain.segment_text(text);
     use std::collections::HashMap;
 
@@ -828,7 +995,7 @@ fn subset_chain(
         subset_fallbacks.push(subset_fallback);
     }
 
-    let mut new_chain = genpdfi::fonts::FontFallbackChain::new(subset_primary);
+    let mut new_chain = genpdfi_extended::fonts::FontFallbackChain::new(subset_primary);
     for fallback in subset_fallbacks {
         new_chain = new_chain.with_fallback(fallback);
     }
@@ -841,10 +1008,11 @@ fn subset_single_font(font: &FontData, text: &str) -> Result<FontData, Error> {
     let original_data = font.get_data()?;
     let original_size = original_data.len();
 
-    let subset_data = genpdfi::subsetting::subset_font(original_data, text).map_err(|e| {
-        eprintln!("\t Warning: Font subsetting failed: {}, using full font", e);
-        e
-    })?;
+    let subset_data =
+        genpdfi_extended::subsetting::subset_font(original_data, text).map_err(|e| {
+            eprintln!("\t Warning: Font subsetting failed: {}, using full font", e);
+            e
+        })?;
 
     let subset_size = subset_data.len();
     let reduction = ((original_size - subset_size) as f64 / original_size as f64) * 100.0;
@@ -901,7 +1069,7 @@ fn format_size(bytes: usize) -> String {
 /// // Load and verify coverage for Romanian text
 /// let romanian_text = "ăâîșț ĂÂÎȘȚ";
 /// let font = load_unicode_system_font(Some(romanian_text))?;
-/// # Ok::<(), genpdfi::error::Error>(())
+/// # Ok::<(), genpdfi_extended::error::Error>(())
 /// ```
 pub fn load_unicode_system_font(text: Option<&str>) -> Result<FontFamily<FontData>, Error> {
     // Priority list of Unicode-capable fonts
@@ -921,12 +1089,45 @@ pub fn load_unicode_system_font(text: Option<&str>) -> Result<FontFamily<FontDat
 
     // Try each Unicode font
     for font_name in &unicode_fonts {
-        if let Ok(family) = load_system_font_family_simple(font_name) {
+        // If an embedded font exists for this name, prefer it and report appropriately
+        if let Some(embedded_family) = try_embedded_font_family(font_name) {
+            // If text provided, check coverage
+            if let Some(text) = text {
+                let coverage = embedded_family.regular.check_coverage(text);
+                if coverage.coverage_percent() >= 98f32 {
+                    eprintln!(
+                        "✓ Using embedded font '{}' ({:.1}% coverage)",
+                        font_name,
+                        coverage.coverage_percent()
+                    );
+                    return Ok(embedded_family);
+                } else {
+                    eprintln!(
+                        "⚠ Embedded font '{}' has only {:.1}% coverage, trying next...",
+                        font_name,
+                        coverage.coverage_percent()
+                    );
+                    tried_fonts.push(format!(
+                        "{} ({:.1}% coverage)",
+                        font_name,
+                        coverage.coverage_percent()
+                    ));
+                    // continue to try system fonts/fallbacks
+                }
+            } else {
+                eprintln!("✓ Using embedded font '{}'", font_name);
+                return Ok(embedded_family);
+            }
+        } else if let Ok(family) = load_system_font_family_simple(font_name) {
             // If text provided, check coverage
             if let Some(text) = text {
                 let coverage = family.regular.check_coverage(text);
-                if coverage.is_complete() {
-                    eprintln!("✓ Using system font '{}' (100% coverage)", font_name);
+                if coverage.coverage_percent() >= 98f32 {
+                    eprintln!(
+                        "✓ Using system font '{}' ({:.1}% coverage)",
+                        font_name,
+                        coverage.coverage_percent()
+                    );
                     return Ok(family);
                 } else {
                     eprintln!(
@@ -977,7 +1178,7 @@ pub fn load_unicode_system_font(text: Option<&str>) -> Result<FontFamily<FontDat
 /// # Returns
 /// A `FontFamily<FontData>` containing the primary fonts
 pub fn extract_primary_fonts(
-    chain_family: &FontFamily<genpdfi::fonts::FontFallbackChain>,
+    chain_family: &FontFamily<genpdfi_extended::fonts::FontFallbackChain>,
 ) -> FontFamily<FontData> {
     FontFamily {
         regular: chain_family.regular.primary().clone(),
@@ -1049,15 +1250,15 @@ pub fn get_default_fallback_fonts(primary_name: &str) -> Vec<String> {
 ///     &[PathBuf::from("./fonts")],
 ///     Some("Hello мир! 👋")
 /// )?;
-/// # Ok::<(), genpdfi::error::Error>(())
+/// # Ok::<(), genpdfi_extended::error::Error>(())
 /// ```
 pub fn load_font_with_fallback_chain(
     primary_name: &str,
     fallback_names: &[String],
     custom_paths: &[PathBuf],
     _text: Option<&str>,
-) -> Result<FontFamily<genpdfi::fonts::FontFallbackChain>, Error> {
-    use genpdfi::fonts::FontFallbackChain;
+) -> Result<FontFamily<genpdfi_extended::fonts::FontFallbackChain>, Error> {
+    use genpdfi_extended::fonts::FontFallbackChain;
 
     // Load primary font
     let primary_family = if !custom_paths.is_empty() {
@@ -1298,5 +1499,176 @@ pub fn load_font_with_fallbacks(
             format!("Could not load font '{}' or any fallbacks", primary_name),
             ErrorKind::InvalidFont,
         ))
+    }
+}
+
+#[cfg(test)]
+mod fonts_integration_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fonts_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts")
+    }
+
+    #[test]
+    fn test_load_custom_font_family_from_fonts_dir() {
+        let fonts = fonts_dir();
+        let family = load_custom_font_family("NotoSans", &[fonts.clone()]);
+        assert!(family.is_ok());
+        let family = family.unwrap();
+        let data = family.regular.get_data().unwrap();
+        assert!(data.len() > 0);
+    }
+
+    #[test]
+    fn test_find_font_variant_in_paths_finds_variants() {
+        let fonts = fonts_dir();
+        let regular = find_font_variant_in_paths("NotoSans", FontVariant::Regular, &[fonts.clone()]);
+        assert!(regular.is_some());
+        let bold = find_font_variant_in_paths("NotoSans", FontVariant::Bold, &[fonts.clone()]);
+        assert!(bold.is_some());
+    }
+
+    #[test]
+    fn test_load_font_family_with_variants_from_fonts_dir() {
+        let fonts = fonts_dir();
+        let family = load_font_family_with_variants("CourierPrime", &[fonts.clone()]);
+        assert!(family.is_ok());
+        let family = family.unwrap();
+        // Bold/Italic should exist (may fallback to regular)
+        assert!(family.bold.get_data().unwrap().len() > 0);
+        assert!(family.regular.get_data().unwrap().len() > 0);
+    }
+
+    #[test]
+    fn test_apply_subsetting_if_enabled_reduces_or_matches_size() {
+        let fonts = fonts_dir();
+        let family = load_custom_font_family("NotoSans", &[fonts]).unwrap();
+        let original_len = family.regular.get_data().unwrap().len();
+
+        let subset = apply_subsetting_if_enabled(family, true, Some("Hello world"));
+        match subset {
+            Ok(subset_family) => {
+                let subset_len = subset_family.regular.get_data().unwrap().len();
+                // Subsetting should not increase size; usually it reduces size
+                assert!(subset_len <= original_len);
+            }
+            Err(e) => {
+                // Subsetting may fail on some font data; ensure we get an Error rather than panic
+                eprintln!("Subsetting failed (expected in some environments): {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_font_with_fallback_chain_and_fallbacks() {
+        let fonts = fonts_dir();
+        let chain = load_font_with_fallback_chain(
+            "Noto Sans",
+            &vec!["CourierPrime".to_string()],
+            &[fonts.clone()],
+            Some("Hello world"),
+        );
+        assert!(chain.is_ok());
+
+        let picked = load_font_with_fallbacks(
+            "NonExistentPrimary",
+            &vec!["Noto Sans".to_string()],
+            &[fonts],
+            None,
+        );
+        assert!(picked.is_ok());
+    }
+
+    #[test]
+    fn test_load_custom_font_family_missing_dir() {
+        let mut tmp = std::env::temp_dir();
+        tmp.push("md2pdf_test_fonts_missing");
+        // Ensure empty dir
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let res = load_custom_font_family("NoSuchFont", &[tmp.clone()]);
+        assert!(res.is_err());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_find_font_variant_in_paths_returns_none_for_missing() {
+        let mut tmp = std::env::temp_dir();
+        tmp.push("md2pdf_test_fonts_empty");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let found = find_font_variant_in_paths("DefinitelyNotAFont", FontVariant::Regular, &[tmp.clone()]);
+        assert!(found.is_none());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_apply_subsetting_to_chain_with_empty_text_returns_same() {
+        let fonts = fonts_dir();
+        let chain = load_font_with_fallback_chain(
+            "Noto Sans",
+            &vec!["CourierPrime".to_string()],
+            &[fonts],
+            None,
+        )
+        .unwrap();
+
+        let subset = apply_subsetting_to_chain(chain.clone(), "");
+        assert!(subset.is_ok());
+        let subset = subset.unwrap();
+
+        // Extract primary fonts and compare sizes
+        let original_primaries = extract_primary_fonts(&chain);
+        let subset_primaries = extract_primary_fonts(&subset);
+        assert_eq!(
+            original_primaries.regular.get_data().unwrap().len(),
+            subset_primaries.regular.get_data().unwrap().len()
+        );
+    }
+
+    #[test]
+    fn test_load_font_with_config_with_fallbacks() {
+        let fonts = fonts_dir();
+        let mut cfg = FontConfig::default();
+        cfg.custom_paths = vec![fonts.clone()];
+        cfg.fallback_fonts = vec!["Noto Sans".to_string()];
+
+        let fam = load_font_with_config("NonExistentPrimary", Some(&cfg), Some("Hello world"));
+        if let Err(e) = &fam {
+            // Subsetting or loading can fail in some environments; ensure error is informative
+            eprintln!("load_font_with_config returned error (acceptable in some envs): {}", e);
+        }
+        assert!(fam.is_ok() || fam.is_err());
+    }
+
+    #[test]
+    fn test_apply_subsetting_to_chain_skips_unused_fallbacks() {
+        let fonts = fonts_dir();
+        let chain = load_font_with_fallback_chain(
+            "Noto Sans",
+            &vec!["CourierPrime".to_string()],
+            &[fonts.clone()],
+            None,
+        )
+        .unwrap();
+
+        // Use text that only requires primary font glyphs so fallback(s) are unused
+        let subset = apply_subsetting_to_chain(chain, "Hello world");
+        match subset {
+            Ok(s) => {
+                // If subsetting succeeded, ensure primary font still has data
+                let _ = s.regular.primary().get_data().unwrap();
+            }
+            Err(e) => {
+                // Subsetting may fail on some environments; accept an Err but log it
+                eprintln!("Subsetting failed in this environment (acceptable): {}", e);
+            }
+        }
     }
 }

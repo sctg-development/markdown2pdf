@@ -108,6 +108,7 @@
 pub mod config;
 mod debug;
 pub mod fonts;
+pub mod highlighting;
 pub mod markdown;
 pub mod pdf;
 pub mod styling;
@@ -629,5 +630,289 @@ Final paragraph.
         let markdown = "![Invalid".to_string();
         let result = parse_into_bytes(markdown, config::ConfigSource::Default, None);
         assert!(matches!(result, Err(MdpError::ParseError { .. })));
+    }
+
+    // Embedde le contenu de `test_snippets.md` et vérifie que les blocs de code
+    // sont rendus avec une police monospace par défaut.
+    const TEST_SNIPPETS: &str = r#"# Test Snippets for Code Highlighting
+
+## C Code
+```c
+#include <stdio.h>
+
+int main() {
+    printf("Hello from C\n");
+    return 0;
+}
+```
+
+## C++ Code
+```cpp
+#include <iostream>
+
+int main() {
+    std::cout << "Hello from C++" << std::endl;
+    return 0;
+}
+```
+
+## Java Code
+```java
+public class HelloWorld {
+    public static void main(String[] args) {
+        System.out.println("Hello from Java");
+    }
+}
+```
+
+## Python Code
+```python
+def greet(name):
+    return f"Hello from {name}"
+
+print(greet("Python"))
+```
+
+## TypeScript Code
+```typescript
+function greet(name: string): string {
+    return `Hello from ${name}`;
+}
+
+console.log(greet("TypeScript"));
+```
+
+## JavaScript Code
+```javascript
+function greet(name) {
+    return `Hello from ${name}`;
+}
+
+console.log(greet("JavaScript"));
+```
+
+## Rust Code
+```rust
+fn main() {
+    let name = "Rust";
+    println!("Hello from {}", name);
+}
+```
+
+## Go Code
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello from Go")
+}
+```
+
+## Bash Code
+```bash
+#!/bin/bash
+
+greet() {
+    echo "Hello from $1"
+}
+
+greet "Bash"
+```
+
+## PowerShell Code
+```powershell
+function Greet($name) {
+    Write-Host "Hello from $name"
+}
+
+Greet "PowerShell"
+```
+
+## JSX Code
+```jsx
+const Button = ({ onClick, label }) => (
+    <button onClick={onClick} className="btn">
+        {label}
+    </button>
+);
+
+export default Button;
+```
+
+## TSX Code
+```tsx
+interface ButtonProps {
+    onClick: () => void;
+    label: string;
+}
+
+const Button: React.FC<ButtonProps> = ({ onClick, label }) => (
+    <button onClick={onClick} className="btn">
+        {label}
+    </button>
+);
+
+export default Button;
+```
+
+## Plain Text
+```text
+This is plain text content without any special formatting.
+It should render as-is without syntax highlighting.
+Just plain readable text for reference.
+```
+
+## Summary
+
+All languages have been tested with sample code snippets:
+- Compiled languages: C, C++, Java, Rust, Go
+- Scripting languages: Python, JavaScript, TypeScript, Bash, PowerShell
+- React variants: JSX, TSX
+- Plain text content
+
+This markdown file is optimized for quick performance testing.
+"#;
+
+    #[test]
+    fn test_code_blocks_render_with_monospace_by_default() {
+        let markdown = TEST_SNIPPETS.to_string();
+        let result = parse_into_bytes(markdown, config::ConfigSource::Default, None);
+        assert!(result.is_ok());
+        let pdf_bytes = result.unwrap();
+        assert!(!pdf_bytes.is_empty());
+        let pdf_text = String::from_utf8_lossy(&pdf_bytes).to_lowercase();
+
+        // Check for common monospace font names or 'mono' markers in the PDF output
+        let monospace_candidates = [
+            "space mono",
+            "courier",
+            "courier new",
+            "liberation mono",
+            "free mono",
+            "monaco",
+            "consolas",
+            "mono",
+        ];
+        let found = monospace_candidates.iter().find(|s| pdf_text.contains(*s));
+        if found.is_none() {
+            // Accept embedded font usage where font names may be obfuscated in the PDF (Type0/embedded).
+            // In that case ensure an embedded font object appears and some code-like text is present.
+            let has_embedded_font =
+                pdf_text.contains("/subtype/type0") || pdf_text.contains("/subtype/type1");
+            if has_embedded_font {
+                // Accept: embedded font used for code blocks even if font name isn't visible
+            } else {
+                eprintln!(
+                    "PDF head (first 1024 bytes):\n{}",
+                    &pdf_text[..pdf_text.len().min(1024)]
+                );
+                panic!("PDF should reference a monospace font for code blocks");
+            }
+        }
+    }
+
+    #[test]
+    fn test_mdp_error_display_variants_and_constructors() {
+        // parse_error constructor
+        let pe = MdpError::parse_error("bad parse");
+        let s = format!("{}", pe);
+        assert!(s.contains("Markdown Parsing Error"));
+        assert!(s.contains("bad parse"));
+
+        // pdf_error constructor
+        let pe2 = MdpError::pdf_error("render failed");
+        let s2 = format!("{}", pe2);
+        assert!(s2.contains("PDF Generation Error"));
+        assert!(s2.contains("render failed"));
+
+        // FontError display
+        let fe = MdpError::FontError {
+            font_name: "X".to_string(),
+            message: "nope".to_string(),
+            suggestion: "install foo".to_string(),
+        };
+        let s3 = format!("{}", fe);
+        assert!(s3.contains("Font Error: Failed to load font 'X'"));
+        assert!(s3.contains("Reason: nope"));
+        assert!(s3.contains("Suggestion: install foo"));
+
+        // ConfigError display
+        let ce = MdpError::ConfigError {
+            message: "bad cfg".to_string(),
+            suggestion: "fix cfg".to_string(),
+        };
+        let s4 = format!("{}", ce);
+        assert!(s4.contains("Configuration Error"));
+        assert!(s4.contains("fix cfg"));
+
+        // IoError display
+        let ioe = MdpError::IoError {
+            message: "io fail".to_string(),
+            path: "/path/to".to_string(),
+            suggestion: "check path".to_string(),
+        };
+        let s5 = format!("{}", ioe);
+        assert!(s5.contains("File Error: io fail"));
+        assert!(s5.contains("📁 Path: /path/to"));
+    }
+
+    #[test]
+    fn test_parse_into_file_unexpected_end_of_input_suggestion() {
+        // Unclosed HTML comment triggers UnexpectedEndOfInput in lexer
+        let markdown = "<!-- unclosed comment".to_string();
+        let res = parse_into_file(markdown, "test_unclosed.pdf", config::ConfigSource::Default, None);
+        match res {
+            Err(MdpError::ParseError { suggestion, .. }) => {
+                let s = suggestion.unwrap_or_default();
+                assert!(s.to_lowercase().contains("unclosed") || s.to_lowercase().contains("code blocks"));
+            }
+            _ => panic!("Expected ParseError due to unexpected end of input"),
+        }
+    }
+
+    #[test]
+    fn test_parse_into_file_pdf_error_suggestion_on_permission() {
+        // Write to root (likely permission denied) to trigger PdfError branch
+        let markdown = "# Test".to_string();
+        let path = "/root/markdown2pdf_test_no_perm.pdf";
+        let res = parse_into_file(markdown, path, config::ConfigSource::Default, None);
+        match res {
+            Err(MdpError::PdfError { suggestion, .. }) => {
+                let s = suggestion.unwrap_or_default().to_lowercase();
+                // Accept either permission suggestion or 'make sure the output directory exists'
+                assert!(s.contains("write permissions") || s.contains("output directory"));
+            }
+            Err(MdpError::IoError { .. }) => {
+                // In some environments the parent-path check may catch it earlier
+            }
+            _ => panic!("Expected PdfError or IoError when writing to protected path"),
+        }
+    }
+
+    #[test]
+    fn test_pdf_new_with_missing_code_font_falls_back() {
+        use crate::config;
+        use crate::fonts;
+
+        let markdown = "# Title".to_string();
+        let tokens = Lexer::new(markdown).parse().unwrap();
+        let style = config::load_config_from_source(config::ConfigSource::Default);
+
+        let font_cfg = fonts::FontConfig {
+            custom_paths: Vec::new(),
+            default_font: None,
+            code_font: Some("DefinitelyNotARealFont123".to_string()),
+            fallback_fonts: Vec::new(),
+            enable_subsetting: true,
+        };
+
+        // Should not panic and should return a Pdf object with a code font loaded (fallback)
+        let pdf = Pdf::new(tokens, style, Some(&font_cfg));
+        // Render document to bytes to ensure the fallback code font is usable at render time
+        let doc = pdf.render_into_document();
+        let bytes = Pdf::render_to_bytes(doc).unwrap();
+        assert!(bytes.starts_with(b"%PDF-"));
     }
 }

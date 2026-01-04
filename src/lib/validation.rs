@@ -300,4 +300,45 @@ mod tests {
             .iter()
             .any(|w| w.kind == WarningKind::LargeDocument));
     }
+
+    #[test]
+    fn test_check_image_references_detects_missing_local_file() {
+        let md = "Here is an image ![alt](definitely_missing_file_12345.png) in the doc";
+        let warnings = check_image_references(md);
+        assert!(warnings.iter().any(|w| w.kind == WarningKind::MissingImage));
+    }
+
+    #[test]
+    fn test_check_image_references_ignores_urls() {
+        let md = "Remote image ![alt](http://example.com/image.png) is fine";
+        let warnings = check_image_references(md);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_has_unicode_font_detection() {
+        let mut cfg = FontConfig::default();
+        cfg.default_font = Some("Noto Sans".to_string());
+        assert!(has_unicode_font(Some(&cfg)));
+
+        let mut cfg2 = FontConfig::default();
+        cfg2.fallback_fonts.push("DejaVu Sans".to_string());
+        assert!(has_unicode_font(Some(&cfg2)));
+
+        // No unicode font
+        let cfg3 = FontConfig::default();
+        assert!(!has_unicode_font(Some(&cfg3)));
+    }
+
+    #[test]
+    fn test_validate_conversion_unicode_warning_behaviour() {
+        let md = "Hello ăâîșț";
+        let warnings = validate_conversion(md, None, None);
+        assert!(warnings.iter().any(|w| w.kind == WarningKind::UnicodeWithoutFont));
+
+        let mut cfg = FontConfig::default();
+        cfg.default_font = Some("Noto Sans".to_string());
+        let warnings2 = validate_conversion(md, Some(&cfg), None);
+        assert!(!warnings2.iter().any(|w| w.kind == WarningKind::UnicodeWithoutFont));
+    }
 }

@@ -1,0 +1,24 @@
+# VS theme settings for TypeScriptReact
+# These only contains additions to existing TypeScript theme
+
+---
+name: TypeScriptReact
+uuid: 8B704EF9-AF8E-402F-933C-1D46D8C49E58
+
+settings:
+# Additions
+- scope: meta.tag string.quoted constant.character.entity.tsx, meta.tag string.quoted constant.character.entity.tsx punctuation.definition.entity.tsx
+  settings: { vsclassificationtype: xml literal - attribute value }
+
+- scope: meta.jsx.children.tsx, constant.character.entity.tsx, punctuation.definition.entity.tsx, invalid.illegal.bad-ampersand.tsx
+  settings: { vsclassificationtype: xml literal - text }
+
+- scope: invalid.illegal.attribute.tsx
+  settings: { vsclassificationtype: identifier }
+
+- scope: punctuation.definition.tag
+  settings: { vsclassificationtype: html operator }
+
+- scope: meta.tag
+  settings: { vsclassificationtype: HTML Element Name }
+...
