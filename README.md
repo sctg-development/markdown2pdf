@@ -2,14 +2,29 @@
 
 <p align="center">
 
-[![Crates.io](https://img.shields.io/crates/v/markdown2pdf)](https://crates.io/crates/markdown2pdf)
-[![Documentation](https://img.shields.io/docsrs/markdown2pdf)](https://docs.rs/markdown2pdf)
-[![License](https://img.shields.io/crates/l/markdown2pdf)](LICENSE)
-[![Downloads](https://img.shields.io/crates/d/markdown2pdf)](https://crates.io/crates/markdown2pdf)
-[![GitHub Stars](https://img.shields.io/github/stars/theiskaa/markdown2pdf)](https://github.com/theiskaa/markdown2pdf/stargazers)
+[![Forked From](https://img.shields.io/badge/forked--from-theiskaa%2Fmarkdown2pdf-blue)](https://github.com/theiskaa/markdown2pdf)
+[![Repository](https://img.shields.io/badge/repo-sctg--development%2Fmarkdown2pdf-green)](https://github.com/sctg-development/markdown2pdf)
+[![Crates.io](https://img.shields.io/badge/crates.io-unpublished-lightgrey)](https://github.com/sctg-development/markdown2pdf)
+[![Documentation](https://img.shields.io/badge/docsrs-unavailable-lightgrey)](https://github.com/sctg-development/markdown2pdf)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/sctg-development/markdown2pdf)](https://github.com/sctg-development/markdown2pdf/stargazers)
 
 </p>
 
+> **Fork notice:** This repository is a fork maintained at `https://github.com/sctg-development/markdown2pdf`.
+> 
+> **Important:** The fork is **not published on crates.io**. To install this fork use:
+>
+> ```bash
+> cargo install --git https://github.com/sctg-development/markdown2pdf
+> ```
+>
+> Or build from source with:
+>
+> ```bash
+> cargo build --release
+> ```
+>
 markdown2pdf converts Markdown to PDF using a lexical analyzer and PDF rendering engine. The library tokenizes Markdown into semantic elements, applies styling rules from TOML configuration, and generates styled PDF output.
 
 Both binary and library are provided. The binary offers CLI conversion from files, URLs, or strings. The library enables programmatic PDF generation with full control over styling and fonts. Configuration can be loaded at runtime or embedded at compile time for containerized deployments.
@@ -35,12 +50,12 @@ cargo install markdown2pdf
 For the latest git version:
 
 ```bash
-cargo install --git https://github.com/theiskaa/markdown2pdf
+cargo install --git https://github.com/sctg-development/markdown2pdf
 ```
 
 ### Prebuilt binaries
 
-Prebuilt versions are available in our [GitHub releases](https://github.com/theiskaa/markdown2pdf/releases/latest):
+Prebuilt versions are available in our [GitHub releases](https://github.com/sctg-development/markdown2pdf/releases/latest):
 
 |  File  | Platform | Checksum |
 |--------|----------|----------|
