@@ -862,11 +862,19 @@ This markdown file is optimized for quick performance testing.
     fn test_parse_into_file_unexpected_end_of_input_suggestion() {
         // Unclosed HTML comment triggers UnexpectedEndOfInput in lexer
         let markdown = "<!-- unclosed comment".to_string();
-        let res = parse_into_file(markdown, "test_unclosed.pdf", config::ConfigSource::Default, None);
+        let res = parse_into_file(
+            markdown,
+            "test_unclosed.pdf",
+            config::ConfigSource::Default,
+            None,
+        );
         match res {
             Err(MdpError::ParseError { suggestion, .. }) => {
                 let s = suggestion.unwrap_or_default();
-                assert!(s.to_lowercase().contains("unclosed") || s.to_lowercase().contains("code blocks"));
+                assert!(
+                    s.to_lowercase().contains("unclosed")
+                        || s.to_lowercase().contains("code blocks")
+                );
             }
             _ => panic!("Expected ParseError due to unexpected end of input"),
         }
@@ -874,20 +882,62 @@ This markdown file is optimized for quick performance testing.
 
     #[test]
     fn test_parse_into_file_pdf_error_suggestion_on_permission() {
-        // Write to root (likely permission denied) to trigger PdfError branch
+        // Try several locations that are expected to be non-writable on CI runners.
         let markdown = "# Test".to_string();
-        let path = "/root/markdown2pdf_test_no_perm.pdf";
-        let res = parse_into_file(markdown, path, config::ConfigSource::Default, None);
-        match res {
-            Err(MdpError::PdfError { suggestion, .. }) => {
-                let s = suggestion.unwrap_or_default().to_lowercase();
-                // Accept either permission suggestion or 'make sure the output directory exists'
-                assert!(s.contains("write permissions") || s.contains("output directory"));
+        let candidates: Vec<&str> = if cfg!(target_os = "linux") {
+            vec![
+                "/proc/markdown2pdf_test_no_perm.pdf",
+                "/sys/markdown2pdf_test_no_perm.pdf",
+                "/root/markdown2pdf_test_no_perm.pdf",
+                "/dev/full",
+            ]
+        } else if cfg!(target_os = "macos") {
+            vec![
+                "/var/root/markdown2pdf_test_no_perm.pdf",
+                "/root/markdown2pdf_test_no_perm.pdf",
+            ]
+        } else {
+            vec!["/root/markdown2pdf_test_no_perm.pdf"]
+        };
+
+        let mut any_ok = false;
+        let mut outcomes: Vec<String> = Vec::new();
+
+        for path in candidates.iter() {
+            let res = parse_into_file(markdown.clone(), path, config::ConfigSource::Default, None);
+            match res {
+                Err(MdpError::PdfError { suggestion, .. }) => {
+                    let s = suggestion.unwrap_or_default().to_lowercase();
+                    // Accept permission-related suggestions, output-dir hints, or generic permission mentions
+                    if s.contains("write permissions")
+                        || s.contains("output directory")
+                        || s.contains("permission")
+                    {
+                        any_ok = true;
+                        break;
+                    } else {
+                        outcomes.push(format!("{} -> PdfError suggestion: {}", path, s));
+                    }
+                }
+                Err(MdpError::IoError { .. }) => {
+                    // Some environments may surface an IoError earlier; accept that as well
+                    any_ok = true;
+                    break;
+                }
+                Err(e) => {
+                    outcomes.push(format!("{} -> {:?}", path, e));
+                }
+                Ok(_) => {
+                    outcomes.push(format!("{} -> Ok", path));
+                }
             }
-            Err(MdpError::IoError { .. }) => {
-                // In some environments the parent-path check may catch it earlier
-            }
-            _ => panic!("Expected PdfError or IoError when writing to protected path"),
+        }
+
+        if !any_ok {
+            panic!(
+                "Could not trigger permission-like error on any candidate path. Outcomes: {:?}",
+                outcomes
+            );
         }
     }
 
