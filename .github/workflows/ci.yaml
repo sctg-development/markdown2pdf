@@ -86,7 +86,10 @@ jobs:
           CARGO_HOME: ${{ runner.temp }}/cargo_home
 
       - name: Build docs
-        run: cargo doc --no-deps --document-private-items --all-features
+        shell: bash
+        run: |
+          export RUSTDOCFLAGS="--html-in-header ../doc_helper/mermaid-header.html --html-in-header ../doc_helper/github-corner.html"
+          cargo doc --no-deps --document-private-items --all-features
 
       - name: Patch docs for GitHub project pages
         shell: bash
