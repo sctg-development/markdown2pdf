@@ -11,6 +11,12 @@ license = "MIT"
 keywords = ["md", "markdown", "pdf", "markdown-to-pdf", "markdown2pdf"]
 repository = "https://github.com/sctg-development/markdown2pdf"
 
+[package.metadata.wix]
+upgrade-guid = "25718F5E-AD0A-4CB0-AA20-B63C11D574A4"
+path-guid = "2D706E2A-B758-4DBD-A5BB-6434B19C742A"
+license = false
+eula = false
+
 [lib]
 name = "markdown2pdf"
 path = "src/lib/lib.rs"
