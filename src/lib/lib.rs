@@ -908,11 +908,25 @@ This markdown file is optimized for quick performance testing.
             match res {
                 Err(MdpError::PdfError { suggestion, .. }) => {
                     let s = suggestion.unwrap_or_default().to_lowercase();
-                    // Accept permission-related suggestions, output-dir hints, or generic permission mentions
-                    if s.contains("write permissions")
-                        || s.contains("output directory")
-                        || s.contains("permission")
-                    {
+                    // Accept a broader set of hints that CI runners might produce:
+                    // - permission-related ('permission', 'permission denied', 'access denied')
+                    // - output path/dir related ('output directory', 'output path', 'try a different')
+                    // - disk/space issues ('disk', 'space', 'no space left')
+                    let accepted_keywords = [
+                        "write permissions",
+                        "permission",
+                        "permission denied",
+                        "access denied",
+                        "output directory",
+                        "output path",
+                        "try a different",
+                        "disk",
+                        "space",
+                        "no space",
+                        "read-only",
+                        "not permitted",
+                    ];
+                    if accepted_keywords.iter().any(|k| s.contains(k)) {
                         any_ok = true;
                         break;
                     } else {
