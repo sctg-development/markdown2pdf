@@ -343,6 +343,12 @@ impl Pdf {
                     current_tokens.clear();
                     self.render_code_block(doc, lang, content);
                 }
+                Token::Math { content, display } if *display => {
+                    // Display math ($$...$$) is a block-level element
+                    self.flush_paragraph(doc, &current_tokens);
+                    current_tokens.clear();
+                    self.render_math_block(doc, content);
+                }
                 Token::HorizontalRule => {
                     self.flush_paragraph(doc, &current_tokens);
                     current_tokens.clear();
@@ -486,6 +492,10 @@ impl Pdf {
                         ));
                     }
                     para.push_styled(content.clone(), code_style);
+                }
+                Token::Math { content, display: false } => {
+                    // Inline math - render to SVG and embed as inline image
+                    self.render_inline_math(para, content, style.clone());
                 }
                 Token::Image(_, _) => {
                     // Images are handled as block-level elements in process_tokens,
@@ -842,6 +852,95 @@ impl Pdf {
         }
 
         doc.push(genpdfi_extended::elements::Break::new(0.5));
+    }
+
+    /// Renders a display math block ($$...$$).
+    ///
+    /// This method converts LaTeX mathematical expressions to SVG and embeds them
+    /// as centered images in the PDF. Display math is rendered as a block-level
+    /// element with appropriate spacing.
+    fn render_math_block(&self, doc: &mut Document, latex_content: &str) {
+        doc.push(genpdfi_extended::elements::Break::new(0.5));
+
+        // Try to render LaTeX to SVG
+        match self.safe_latex_to_svg(latex_content, true) {
+            Ok(svg_string) => {
+                match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
+                    Ok(image) => {
+                        let resized_image = image
+                            .resizing_page_with(0.8)
+                            .with_alignment(Alignment::Center);
+                        doc.push(resized_image);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create image from LaTeX SVG: {}", e);
+                        let mut para = genpdfi_extended::elements::Paragraph::default();
+                        let style = genpdfi_extended::style::Style::new()
+                            .with_font_size(self.style.text.size)
+                            .italic();
+                        para.push_styled(format!("[LaTeX: {}]", latex_content), style);
+                        doc.push(para);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to render LaTeX: {}", e);
+                let mut para = genpdfi_extended::elements::Paragraph::default();
+                let style = genpdfi_extended::style::Style::new()
+                    .with_font_size(self.style.text.size)
+                    .italic();
+                para.push_styled(format!("[LaTeX error: {}]", latex_content), style);
+                doc.push(para);
+            }
+        }
+
+        doc.push(genpdfi_extended::elements::Break::new(0.5));
+    }
+
+    /// Safely render LaTeX to SVG with error recovery.
+    ///
+    /// This wraps the LaTeX rendering call with error handling to prevent
+    /// panics from underlying C++ dependencies.
+    fn safe_latex_to_svg(&self, content: &str, display: bool) -> Result<String, String> {
+        // Use catch_unwind to protect against panics in C++ code
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::latex::latex_to_svg(content, display)
+        }))
+        .unwrap_or_else(|_| Err("LaTeX rendering caused an internal error".to_string()))
+    }
+
+    /// Renders inline math ($...$).
+    ///
+    /// This method converts inline LaTeX expressions to SVG and displays them
+    /// as text fallback. genpdfi_extended's Paragraph API doesn't directly support
+    /// embedding images inline, so we display the LaTeX source as readable text.
+    fn render_inline_math(
+        &self,
+        para: &mut genpdfi_extended::elements::Paragraph,
+        latex_content: &str,
+        style: genpdfi_extended::style::Style,
+    ) {
+        // Try to render, but display text fallback either way
+        match self.safe_latex_to_svg(latex_content, false) {
+            Ok(_svg_string) => {
+                // SVG was generated successfully, but since genpdfi_extended doesn't
+                // support inline images in paragraphs, we display the LaTeX source
+                // as a readable fallback with code-like styling
+                let mut math_style = style.clone();
+                if let Some(color) = self.style.code.text_color {
+                    math_style = math_style.with_color(genpdfi_extended::style::Color::Rgb(
+                        color.0, color.1, color.2,
+                    ));
+                }
+                para.push_styled(format!("${{{}}}", latex_content), math_style);
+            }
+            Err(e) => {
+                eprintln!("Failed to render inline LaTeX: {}", e);
+                // Fallback to text representation with error indicator
+                let error_style = style.clone().italic();
+                para.push_styled(format!("[LaTeX: {}]", latex_content), error_style);
+            }
+        }
     }
 }
 
