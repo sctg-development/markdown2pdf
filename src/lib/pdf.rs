@@ -752,7 +752,7 @@ impl Pdf {
         doc.push(genpdfi_extended::elements::Break::new(0.5));
 
         let mut loader_opt = self.image_loader.borrow_mut();
-        
+
         if let Some(ref mut loader) = *loader_opt {
             match loader.load(url) {
                 Ok(image_data) => {
@@ -762,7 +762,9 @@ impl Pdf {
                             // For SVG, use native SVG rendering
                             match String::from_utf8(image_data.bytes.clone()) {
                                 Ok(svg_string) => {
-                                    match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
+                                    match genpdfi_extended::elements::Image::from_svg_string(
+                                        &svg_string,
+                                    ) {
                                         Ok(image) => {
                                             let resized_image = image
                                                 .resizing_page_with(0.8)
@@ -771,11 +773,15 @@ impl Pdf {
                                         }
                                         Err(e) => {
                                             eprintln!("Failed to render SVG: {}", e);
-                                            let mut para = genpdfi_extended::elements::Paragraph::default();
+                                            let mut para =
+                                                genpdfi_extended::elements::Paragraph::default();
                                             let style = genpdfi_extended::style::Style::new()
                                                 .with_font_size(self.style.text.size)
                                                 .italic();
-                                            para.push_styled(format!("[SVG Image: {}]", alt), style);
+                                            para.push_styled(
+                                                format!("[SVG Image: {}]", alt),
+                                                style,
+                                            );
                                             doc.push(para);
                                         }
                                     }

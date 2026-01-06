@@ -594,7 +594,7 @@ impl Lexer {
         if self.current_char() == '(' {
             self.advance(); // skip '('
             let url = self.read_until_char(')');
-            
+
             // Handle optional title: extract URL part before space or quote
             let url_only = if let Some(space_pos) = url.find(' ') {
                 url[..space_pos].trim().to_string()
@@ -603,7 +603,7 @@ impl Lexer {
             } else {
                 url.trim().to_string()
             };
-            
+
             self.advance(); // skip ')'
             return Ok(Token::Link(text, url_only));
         }
@@ -622,7 +622,7 @@ impl Lexer {
             if self.current_char() == '(' {
                 self.advance(); // skip '('
                 let url = self.read_until_char(')');
-                
+
                 // Handle optional title: extract URL part before space or quote
                 let url_only = if let Some(space_pos) = url.find(' ') {
                     url[..space_pos].trim().to_string()
@@ -631,7 +631,7 @@ impl Lexer {
                 } else {
                     url.trim().to_string()
                 };
-                
+
                 self.advance(); // skip ')'
                 Ok(Token::Image(alt_text, url_only))
             } else {

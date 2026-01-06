@@ -9,15 +9,11 @@ mod integration_tests {
         // Load the test markdown with images
         let markdown_path = Path::new("tests/images.md");
         if !markdown_path.exists() {
-            eprintln!(
-                "Skipping test: {} not found",
-                markdown_path.display()
-            );
+            eprintln!("Skipping test: {} not found", markdown_path.display());
             return;
         }
 
-        let markdown = fs::read_to_string(markdown_path)
-            .expect("Failed to read tests/images.md");
+        let markdown = fs::read_to_string(markdown_path).expect("Failed to read tests/images.md");
 
         let output_path = "test_output_images.pdf";
 
@@ -33,14 +29,10 @@ mod integration_tests {
         match result {
             Ok(_) => {
                 // Verify PDF was created
-                assert!(
-                    Path::new(output_path).exists(),
-                    "PDF file was not created"
-                );
+                assert!(Path::new(output_path).exists(), "PDF file was not created");
 
                 // Clean up
-                fs::remove_file(output_path)
-                    .expect("Failed to clean up test PDF");
+                fs::remove_file(output_path).expect("Failed to clean up test PDF");
             }
             Err(e) => {
                 panic!("Failed to render images.md: {}", e);
@@ -53,15 +45,11 @@ mod integration_tests {
         // Load the test markdown with images
         let markdown_path = Path::new("tests/images.md");
         if !markdown_path.exists() {
-            eprintln!(
-                "Skipping test: {} not found",
-                markdown_path.display()
-            );
+            eprintln!("Skipping test: {} not found", markdown_path.display());
             return;
         }
 
-        let markdown = fs::read_to_string(markdown_path)
-            .expect("Failed to read tests/images.md");
+        let markdown = fs::read_to_string(markdown_path).expect("Failed to read tests/images.md");
 
         // Render to bytes with image support
         let result = markdown2pdf::parse_into_bytes_with_images(

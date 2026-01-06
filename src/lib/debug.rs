@@ -365,16 +365,30 @@ mod debug_tests {
     fn test_tokens_many_variants() {
         let tokens = vec![
             Token::Heading(vec![Token::Text("H".to_string())], 2),
-            Token::Emphasis { level: 1, content: vec![Token::Text("e".to_string())] },
+            Token::Emphasis {
+                level: 1,
+                content: vec![Token::Text("e".to_string())],
+            },
             Token::StrongEmphasis(vec![Token::Text("s".to_string())]),
             Token::BlockQuote("quote".to_string()),
-            Token::ListItem { content: vec![Token::Text("li".to_string())], ordered: true, number: Some(1) },
+            Token::ListItem {
+                content: vec![Token::Text("li".to_string())],
+                ordered: true,
+                number: Some(1),
+            },
             Token::Link("link".to_string(), "http://example".to_string()),
             Token::Image("alt".to_string(), "img.png".to_string()),
-            Token::Table { headers: vec![vec![Token::Text("h".to_string())]], aligns: vec![genpdfi_extended::Alignment::Left], rows: vec![vec![vec![Token::Text("c".to_string())]]]},
+            Token::Table {
+                headers: vec![vec![Token::Text("h".to_string())]],
+                aligns: vec![genpdfi_extended::Alignment::Left],
+                rows: vec![vec![vec![Token::Text("c".to_string())]]],
+            },
             Token::TableAlignment(genpdfi_extended::Alignment::Center),
             Token::HtmlComment("<!--x-->".to_string()),
-            Token::Math { content: "x^2".to_string(), display: false },
+            Token::Math {
+                content: "x^2".to_string(),
+                display: false,
+            },
             Token::Newline,
             Token::HorizontalRule,
             Token::Unknown("??".to_string()),
