@@ -392,7 +392,7 @@ fn load_system_font_bytes_fallback(candidates: &[&str]) -> Result<Vec<u8>, Error
             .any(|cand| file_name.contains(&cand.to_lowercase()))
         {
             if let Ok(bytes) = fs::read(path) {
-                if Font::from_bytes(bytes.clone()).is_ok() {
+                if Font::try_from_bytes(&bytes).is_some() {
                     return Ok(bytes);
                 }
             }
@@ -416,7 +416,7 @@ fn load_system_font_bytes_fallback(candidates: &[&str]) -> Result<Vec<u8>, Error
         }
 
         if let Ok(bytes) = fs::read(path) {
-            if Font::from_bytes(bytes.clone()).is_ok() {
+            if Font::try_from_bytes(&bytes).is_some() {
                 return Ok(bytes);
             }
         }
@@ -498,8 +498,9 @@ pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>
                         continue;
                     } else {
                         // Regular .ttf/.otf file
-                        // Use catch_unwind because Font::from_bytes() can panic on invalid data
-                        let is_valid = panic::catch_unwind(|| Font::from_bytes(b.clone()).is_ok())
+                        // Prefer `try_from_bytes` which returns an Option; keep `catch_unwind` as
+                        // an extra safety in case of unexpected panics from font parsing.
+                        let is_valid = panic::catch_unwind(|| Font::try_from_vec(b.clone()).is_some())
                             .unwrap_or(false);
 
                         if is_valid {
@@ -521,9 +522,9 @@ pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>
 
             // Double-check the font is valid before creating FontData
             // This prevents panics from invalid .ttc extractions
-            // Use catch_unwind because Font::from_bytes() can panic on invalid data
+            // Prefer `try_from_bytes` and keep `catch_unwind` as an extra safety.
             let is_valid =
-                panic::catch_unwind(|| Font::from_bytes(bytes.clone()).is_ok()).unwrap_or(false);
+                panic::catch_unwind(|| Font::try_from_vec(bytes.clone()).is_some()).unwrap_or(false);
 
             if !is_valid {
                 eprintln!("  ⚠ Font data invalid, skipping '{}'", candidate_name);
@@ -581,7 +582,7 @@ pub fn load_custom_font_family(
             if let Some(file_name) = custom_path.file_name().and_then(|n| n.to_str()) {
                 if file_name.to_lowercase().contains(&wanted) {
                     if let Ok(bytes) = fs::read(custom_path) {
-                        if rusttype::Font::from_bytes(bytes.clone()).is_ok() {
+                        if rusttype::Font::try_from_bytes(&bytes).is_some() {
                             let shared = Arc::new(bytes);
                             let mk = || FontData::new_shared(shared.clone(), None);
                             return Ok(FontFamily {
@@ -611,7 +612,7 @@ pub fn load_custom_font_family(
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                         if file_name.to_lowercase().contains(&wanted) {
                             if let Ok(bytes) = fs::read(&path) {
-                                if rusttype::Font::from_bytes(bytes.clone()).is_ok() {
+                                if rusttype::Font::try_from_bytes(&bytes).is_some() {
                                     let shared = Arc::new(bytes);
                                     let mk = || FontData::new_shared(shared.clone(), None);
                                     return Ok(FontFamily {
@@ -699,7 +700,7 @@ fn find_font_variant_in_paths(
                     for pattern in &patterns {
                         if file_lower.contains(pattern) || file_lower == *pattern {
                             if let Ok(bytes) = fs::read(&path) {
-                                if Font::from_bytes(bytes.clone()).is_ok() {
+                                if Font::try_from_bytes(&bytes).is_some() {
                                     if candidate != base_name {
                                         eprintln!(
                                             "  ℹ Found '{}' variant as alias for '{}'",

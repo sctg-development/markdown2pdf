@@ -36,7 +36,7 @@ genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended
     "images",
 ] } # printpdf 0.8.2
 printpdf = "0.8.2"
-microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", rev = "a3e1703", features = [
+microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", features = [
     # "vendored-cairo",
     # "vendored-pango",
 ] }
@@ -52,7 +52,7 @@ reqwest = { version = "0.13.1", features = [
 fontdb = "0.23.0"
 
 lopdf = "0.38.0"
-rusttype = "0.8"
+rusttype = "0.9.3"
 syntect = "5.3.0"
 lazy_static = "1.4"
 

@@ -17,7 +17,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libpango1.0-dev libfontconfig1-dev pkg-config
+      # install meson and nija with --break-system-packages
+      - name: Install meson and ninja
+        run: |
+          python3 -m pip install --break-system-packages meson ninja
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: Setup libpdfium environment variable
         run: |
           echo "LIBPDFIUM_PATH=$(pwd)/pdfium/lib/linux" >> $GITHUB_ENV
