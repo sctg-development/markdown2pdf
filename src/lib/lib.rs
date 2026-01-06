@@ -109,6 +109,7 @@ pub mod config;
 mod debug;
 pub mod fonts;
 pub mod highlighting;
+pub mod images;
 pub mod markdown;
 pub mod pdf;
 pub mod styling;
@@ -343,6 +344,94 @@ pub fn parse_into_file(
     Ok(())
 }
 
+/// Transforms Markdown content with image support into a styled PDF document and saves it to the specified path.
+///
+/// This is a variant of `parse_into_file` that supports resolving relative image paths based on the
+/// markdown document location. Remote images can also be downloaded if the `fetch` feature is enabled.
+///
+/// # Arguments
+/// * `markdown` - The Markdown content to convert
+/// * `output_path` - The output file path for the generated PDF
+/// * `markdown_path` - Path to the markdown document (for resolving relative image references)
+/// * `config` - Configuration source (Default, File path, or Embedded TOML)
+/// * `font_config` - Optional font configuration with custom paths and font overrides
+///
+/// # Returns
+/// * `Ok(())` on successful PDF generation and save
+/// * `Err(MdpError)` if errors occur during parsing, image loading, or file operations
+///
+/// # Example
+/// ```rust
+/// use std::error::Error;
+/// use markdown2pdf::config::ConfigSource;
+/// use std::path::Path;
+///
+/// fn example() -> Result<(), Box<dyn Error>> {
+///     let markdown = "# Document\n![Image](images/photo.jpg)".to_string();
+///     markdown2pdf::parse_into_file_with_images(
+///         markdown,
+///         "output.pdf",
+///         Path::new("document.md"),
+///         ConfigSource::Default,
+///         None
+///     )?;
+///     Ok(())
+/// }
+/// ```
+pub fn parse_into_file_with_images(
+    markdown: String,
+    output_path: &str,
+    markdown_path: &std::path::Path,
+    config: config::ConfigSource,
+    font_config: Option<&fonts::FontConfig>,
+) -> Result<(), MdpError> {
+    // Validate output path exists
+    if let Some(parent) = std::path::Path::new(output_path).parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(MdpError::IoError {
+                message: format!("Output directory does not exist"),
+                path: parent.display().to_string(),
+                suggestion: format!("Create the directory first: mkdir -p {}", parent.display()),
+            });
+        }
+    }
+
+    let mut lexer = Lexer::new(markdown);
+    let tokens = lexer.parse().map_err(|e| {
+        let msg = format!("{:?}", e);
+        MdpError::ParseError {
+            message: msg.clone(),
+            position: None,
+            suggestion: Some(if msg.contains("UnexpectedEndOfInput") {
+                "Check for unclosed code blocks (```), links, or image tags".to_string()
+            } else {
+                "Verify your Markdown syntax is valid. Try testing with a simpler document first."
+                    .to_string()
+            }),
+        }
+    })?;
+
+    let style = config::load_config_from_source(config);
+    let pdf = Pdf::with_document_path(tokens, style, font_config, Some(markdown_path));
+    let document = pdf.render_into_document();
+
+    if let Some(err) = Pdf::render(document, output_path) {
+        return Err(MdpError::PdfError {
+            message: err.clone(),
+            path: Some(output_path.to_string()),
+            suggestion: Some(if err.contains("Permission") || err.contains("denied") {
+                "Check that you have write permissions for this location".to_string()
+            } else if err.contains("No such file") {
+                "Make sure the output directory exists".to_string()
+            } else {
+                "Try a different output path or check available disk space".to_string()
+            }),
+        });
+    }
+
+    Ok(())
+}
+
 /// Transforms Markdown content into a styled PDF document and returns the PDF data as bytes.
 /// This function provides the same conversion pipeline as `parse_into_file` but returns
 /// the PDF content directly as a byte vector instead of writing to a file.
@@ -404,6 +493,67 @@ pub fn parse_into_bytes(
 
     let style = config::load_config_from_source(config);
     let pdf = Pdf::new(tokens, style, font_config);
+    let document = pdf.render_into_document();
+
+    Pdf::render_to_bytes(document).map_err(|err| MdpError::PdfError {
+        message: err,
+        path: None,
+        suggestion: Some("Check available memory and try with a smaller document".to_string()),
+    })
+}
+
+/// Transforms Markdown content with image support into a byte vector PDF.
+///
+/// Similar to `parse_into_bytes` but with support for resolving relative image paths.
+/// This is useful when you need PDF bytes but still want images to be loaded relative
+/// to the markdown document location.
+///
+/// # Arguments
+/// * `markdown` - The Markdown content to convert
+/// * `markdown_path` - Path to the markdown document (for resolving relative image references)
+/// * `config` - Configuration source (Default, File path, or Embedded TOML)
+/// * `font_config` - Optional font configuration
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` containing the PDF data on successful conversion
+/// * `Err(MdpError)` if errors occur
+///
+/// # Example
+/// ```rust
+/// use markdown2pdf::config::ConfigSource;
+/// use std::path::Path;
+///
+/// let markdown = "# Title\n![Image](images/photo.jpg)".to_string();
+/// let pdf = markdown2pdf::parse_into_bytes_with_images(
+///     markdown,
+///     Path::new("document.md"),
+///     ConfigSource::Default,
+///     None
+/// );
+/// ```
+pub fn parse_into_bytes_with_images(
+    markdown: String,
+    markdown_path: &std::path::Path,
+    config: config::ConfigSource,
+    font_config: Option<&fonts::FontConfig>,
+) -> Result<Vec<u8>, MdpError> {
+    let mut lexer = Lexer::new(markdown);
+    let tokens = lexer.parse().map_err(|e| {
+        let msg = format!("{:?}", e);
+        MdpError::ParseError {
+            message: msg.clone(),
+            position: None,
+            suggestion: Some(if msg.contains("UnexpectedEndOfInput") {
+                "Check for unclosed code blocks (```), links, or image tags".to_string()
+            } else {
+                "Verify your Markdown syntax is valid. Try testing with a simpler document first."
+                    .to_string()
+            }),
+        }
+    })?;
+
+    let style = config::load_config_from_source(config);
+    let pdf = Pdf::with_document_path(tokens, style, font_config, Some(markdown_path));
     let document = pdf.render_into_document();
 
     Pdf::render_to_bytes(document).map_err(|err| MdpError::PdfError {
@@ -630,6 +780,26 @@ Final paragraph.
         let markdown = "![Invalid".to_string();
         let result = parse_into_bytes(markdown, config::ConfigSource::Default, None);
         assert!(matches!(result, Err(MdpError::ParseError { .. })));
+    }
+
+    #[test]
+    fn test_parse_with_image_references() {
+        let markdown = r#"# Document with images
+
+![Test Image](test_image.jpg)
+
+Some text between images.
+
+![Another Image](images/photo.png)
+
+End of document.
+"#
+        .to_string();
+        let result = parse_into_bytes(markdown, config::ConfigSource::Default, None);
+        assert!(result.is_ok());
+        let pdf_bytes = result.unwrap();
+        assert!(!pdf_bytes.is_empty());
+        assert!(pdf_bytes.starts_with(b"%PDF-"));
     }
 
     // Embedde le contenu de `test_snippets.md` et vérifie que les blocs de code

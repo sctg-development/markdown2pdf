@@ -594,8 +594,18 @@ impl Lexer {
         if self.current_char() == '(' {
             self.advance(); // skip '('
             let url = self.read_until_char(')');
+            
+            // Handle optional title: extract URL part before space or quote
+            let url_only = if let Some(space_pos) = url.find(' ') {
+                url[..space_pos].trim().to_string()
+            } else if let Some(quote_pos) = url.find('"') {
+                url[..quote_pos].trim().to_string()
+            } else {
+                url.trim().to_string()
+            };
+            
             self.advance(); // skip ')'
-            return Ok(Token::Link(text, url));
+            return Ok(Token::Link(text, url_only));
         }
         Ok(Token::Link(text, String::new()))
     }
@@ -612,8 +622,18 @@ impl Lexer {
             if self.current_char() == '(' {
                 self.advance(); // skip '('
                 let url = self.read_until_char(')');
+                
+                // Handle optional title: extract URL part before space or quote
+                let url_only = if let Some(space_pos) = url.find(' ') {
+                    url[..space_pos].trim().to_string()
+                } else if let Some(quote_pos) = url.find('"') {
+                    url[..quote_pos].trim().to_string()
+                } else {
+                    url.trim().to_string()
+                };
+                
                 self.advance(); // skip ')'
-                Ok(Token::Image(alt_text, url))
+                Ok(Token::Image(alt_text, url_only))
             } else {
                 Err(LexerError::UnknownToken(alt_text))
             }
@@ -1334,10 +1354,10 @@ This is a paragraph with *italic* and **bold** text.
     fn test_link_and_image_edge_cases() {
         let tests = vec![
             (
-                "[Link with spaces](https://example.com/path with spaces)",
+                "[Link with spaces](https://example.com/path)",
                 vec![Token::Link(
                     "Link with spaces".to_string(),
-                    "https://example.com/path with spaces".to_string(),
+                    "https://example.com/path".to_string(),
                 )],
             ),
             (

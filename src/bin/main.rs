@@ -45,6 +45,11 @@ fn get_markdown_input(matches: &clap::ArgMatches) -> Result<String, AppError> {
     }
 }
 
+/// Get the markdown document path if provided as a file.
+fn get_markdown_path(matches: &clap::ArgMatches) -> Option<PathBuf> {
+    matches.get_one::<String>("path").map(PathBuf::from)
+}
+
 fn get_output_path(matches: &clap::ArgMatches) -> Result<PathBuf, AppError> {
     let current_dir = std::env::current_dir().map_err(|e| AppError::PathError(e.to_string()))?;
 
@@ -68,6 +73,7 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
     let dry_run = matches.get_flag("dry-run");
 
     let markdown = get_markdown_input(&matches)?;
+    let markdown_path = get_markdown_path(&matches);
     let output_path = get_output_path(&matches)?;
     let output_path_str = output_path
         .to_str()
@@ -161,13 +167,26 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
         }
     }
 
-    markdown2pdf::parse_into_file(
-        markdown,
-        output_path_str,
-        markdown2pdf::config::ConfigSource::Default,
-        font_config.as_ref(),
-    )
-    .map_err(|e| AppError::ConversionError(e.to_string()))?;
+    // Use parse_into_file_with_images if we have a document path (for relative image resolution)
+    // Otherwise use the basic parse_into_file
+    if let Some(path) = markdown_path {
+        markdown2pdf::parse_into_file_with_images(
+            markdown,
+            output_path_str,
+            &path,
+            markdown2pdf::config::ConfigSource::Default,
+            font_config.as_ref(),
+        )
+        .map_err(|e| AppError::ConversionError(e.to_string()))?;
+    } else {
+        markdown2pdf::parse_into_file(
+            markdown,
+            output_path_str,
+            markdown2pdf::config::ConfigSource::Default,
+            font_config.as_ref(),
+        )
+        .map_err(|e| AppError::ConversionError(e.to_string()))?;
+    }
 
     if verbosity != Verbosity::Quiet {
         println!("✅ Successfully saved PDF to {}", output_path_str);
