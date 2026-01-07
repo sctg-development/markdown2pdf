@@ -17,7 +17,8 @@ mod integration_tests {
             return;
         }
 
-        let markdown = fs::read_to_string(markdown_path).expect("Failed to read tests/latex_examples.md");
+        let markdown =
+            fs::read_to_string(markdown_path).expect("Failed to read tests/latex_examples.md");
         let output_path = "test_output_latex.pdf";
 
         let result = markdown2pdf::parse_into_file_with_images(
@@ -48,7 +49,8 @@ mod integration_tests {
             return;
         }
 
-        let markdown = fs::read_to_string(markdown_path).expect("Failed to read tests/latex_examples.md");
+        let markdown =
+            fs::read_to_string(markdown_path).expect("Failed to read tests/latex_examples.md");
 
         let result = markdown2pdf::parse_into_bytes_with_images(
             markdown,
@@ -60,7 +62,10 @@ mod integration_tests {
         match result {
             Ok(pdf_bytes) => {
                 assert!(!pdf_bytes.is_empty(), "PDF bytes should not be empty");
-                assert!(pdf_bytes.starts_with(b"%PDF-"), "PDF bytes should start with PDF header");
+                assert!(
+                    pdf_bytes.starts_with(b"%PDF-"),
+                    "PDF bytes should start with PDF header"
+                );
             }
             Err(e) => {
                 panic!("Failed to render latex_examples.md to bytes: {}", e);
