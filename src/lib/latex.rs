@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //!
-//! ```ignore
+//! ```rust
 //! use markdown2pdf::latex::latex_to_svg;
 //!
 //! // Render an inline mathematical expression
@@ -18,6 +18,10 @@
 //! underlying C++ dependencies that may cause runtime crashes in test environment.
 
 use microtex_rs::{MicroTex, RenderConfig};
+use once_cell::sync::OnceCell;
+use std::sync::Mutex;
+
+static MICRO_TEX: OnceCell<Mutex<MicroTex>> = OnceCell::new();
 
 /// Converts a LaTeX mathematical expression to SVG format.
 ///
@@ -35,7 +39,7 @@ use microtex_rs::{MicroTex, RenderConfig};
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust
 /// use markdown2pdf::latex::latex_to_svg;
 ///
 /// // Inline math
@@ -63,16 +67,25 @@ pub fn latex_to_svg(latex_content: &str, display: bool) -> Result<String, String
     let latex_with_delimiters = if display {
         format!("\\[{}\\]", latex)
     } else {
-        format!("${{{}}}", latex)
-    };
+        // Use single-dollar inline math
+        format!("${}$", latex)
+    }; 
 
-    // Create a MicroTeX instance
-    let renderer = MicroTex::new().map_err(|e| format!("Failed to initialize MicroTeX: {}", e))?;
-
-    // Create render configuration with defaults
+    // Initialize render configuration with defaults
     let config = RenderConfig::default();
 
-    // Render LaTeX to SVG
+    // Initialize or get the global MicroTeX renderer (singleton) and lock it.
+    let renderer_mutex = MICRO_TEX.get_or_try_init(|| {
+        MicroTex::new()
+            .map(Mutex::new)
+            .map_err(|e| format!("Failed to initialize MicroTeX: {}", e))
+    })?;
+
+    let renderer = renderer_mutex
+        .lock()
+        .map_err(|e| format!("Failed to lock MicroTeX renderer: {}", e))?;
+
+    // Render LaTeX to SVG using the shared renderer
     renderer
         .render(&latex_with_delimiters, &config)
         .map_err(|e| format!("Failed to render LaTeX: {}", e))
@@ -96,5 +109,24 @@ mod tests {
     fn test_latex_to_svg_whitespace_only() {
         let result = latex_to_svg("   \n  ", false);
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[ignore]
+    fn test_multiple_latex_renders() {
+        // This test is ignored by default because it depends on MicroTeX native deps.
+        let exprs = vec![
+            ("H(s) = \\prod_{i=1}^{n/2} \\frac{1}{s^2 + \\frac{\\omega_0}{Q_i}s + \\omega_0^2}", true),
+            ("\\Delta f = \\frac{f_s}{N}", true),
+            ("\\Delta f = \\frac{48000}{4096} \\approx 11.7 \\text{ Hz}", true),
+            ("f_{peak} = f_k + \\frac{\\delta f}{2} \\cdot \\frac{m_{k-1} - m_{k+1}}{m_{k-1} - 2m_k + m_{k+1}}", true),
+            ("C = a_0 + a_1 \\cdot S + a_2 \\cdot S^2 + a_3 \\cdot S^3 + a_4 \\cdot S^4", true),
+        ];
+
+        for (s, display) in exprs {
+            if let Err(e) = super::latex_to_svg(s, display) {
+                panic!("Failed to render {}: {}", s, e);
+            }
+        }
     }
 }
