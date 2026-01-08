@@ -1,5 +1,6 @@
 use clap::{Arg, Command};
 use markdown2pdf::validation;
+use log::{debug, info, warn, error};
 #[cfg(feature = "fetch")]
 use reqwest::blocking::Client;
 use std::fs;
@@ -121,14 +122,13 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
 
         if !warnings.is_empty() {
             if verbosity == Verbosity::Verbose {
-                eprintln!("\n🔍 Pre-flight validation:");
+                info!("🔍 Pre-flight validation:");
             }
             for warning in &warnings {
-                eprintln!("{}", warning);
+                warn!("{}", warning);
             }
-            eprintln!(); // Empty line after warnings
         } else if verbosity == Verbosity::Verbose {
-            eprintln!("✓ Pre-flight validation passed\n");
+            info!("✓ Pre-flight validation passed");
         }
 
         // If dry-run, stop here
@@ -156,13 +156,13 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
 
     // Generate PDF
     if verbosity == Verbosity::Verbose {
-        eprintln!("📄 Generating PDF...");
+        info!("📄 Generating PDF...");
         if let Some(cfg) = &font_config {
             if let Some(font) = &cfg.default_font {
-                eprintln!("   Font: {}", font);
+                info!("   Font: {}", font);
             }
             if !cfg.fallback_fonts.is_empty() {
-                eprintln!("   Fallbacks: {}", cfg.fallback_fonts.join(", "));
+                info!("   Fallbacks: {}", cfg.fallback_fonts.join(", "));
             }
         }
     }
@@ -208,6 +208,11 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
 }
 
 fn main() {
+    // Initialize logger with environment variable control (RUST_LOG)
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
+
     let cmd = Command::new("markdown2pdf")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Convert Markdown files or strings to PDF")
@@ -388,11 +393,11 @@ fn main() {
 
     if let Err(e) = run(matches) {
         match e {
-            AppError::FileReadError(e) => eprintln!("[X] Error reading file: {}", e),
-            AppError::ConversionError(e) => eprintln!("[X] Conversion error: {}", e),
-            AppError::PathError(e) => eprintln!("[X] Path error: {}", e),
+            AppError::FileReadError(e) => error!("[X] Error reading file: {}", e),
+            AppError::ConversionError(e) => error!("[X] Conversion error: {}", e),
+            AppError::PathError(e) => error!("[X] Path error: {}", e),
             #[cfg(feature = "fetch")]
-            AppError::NetworkError(e) => eprintln!("[X] Network error: {}", e),
+            AppError::NetworkError(e) => error!("[X] Network error: {}", e),
         }
         process::exit(1);
     }

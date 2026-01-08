@@ -116,6 +116,7 @@ pub mod pdf;
 pub mod styling;
 pub mod validation;
 
+use log::{debug, error, info, warn};
 use markdown::*;
 use pdf::Pdf;
 use std::error::Error;

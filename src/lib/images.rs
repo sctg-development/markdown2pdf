@@ -23,7 +23,7 @@
 //! // let image = loader.load("./images/photo.jpg").await.unwrap();
 //! ```
 
-use std::collections::HashMap;
+use log::{debug, info, warn, error};use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Represents different image formats supported by the library.
@@ -290,10 +290,10 @@ impl ImageLoader {
     /// # Errors
     /// Returns `ImageError::LoadError` if the file cannot be read.
     fn load_local(&self, path: &str) -> Result<Vec<u8>, ImageError> {
-        eprintln!("[ImageLoader] Loading local file: {}", path);
+        debug!("[ImageLoader] Loading local file: {}", path);
 
         let bytes = std::fs::read(path).map_err(|e| {
-            eprintln!("[ImageLoader] Failed to read file {}: {}", path, e);
+            debug!("[ImageLoader] Failed to read file {}: {}", path, e);
             ImageError::LoadError(format!("Failed to read file {}: {}", path, e))
         })?;
 

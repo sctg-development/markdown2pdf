@@ -2,6 +2,7 @@ use std::fs;
 use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
+use log::{debug, info, warn, error};
 
 use fontdb::Database;
 use genpdfi_extended::error::{Error, ErrorKind};
@@ -510,14 +511,14 @@ pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to read font file {:?}: {}", path, e);
+                    warn!("Failed to read font file {:?}: {}", path, e);
                 }
             }
         }
 
         if let Some(bytes) = selected_bytes {
             if candidate_name != name {
-                eprintln!("  ℹ Using '{}' as alias for '{}'", candidate_name, name);
+                debug!("  ℹ Using '{}' as alias for '{}'", candidate_name, name);
             }
 
             // Double-check the font is valid before creating FontData
@@ -894,7 +895,7 @@ fn apply_subsetting_if_enabled(
 
     let subset_data =
         genpdfi_extended::subsetting::subset_font(original_data, text).map_err(|e| {
-            eprintln!("Warning: Font subsetting failed: {}, using full font", e);
+            warn!("Warning: Font subsetting failed: {}, using full font", e);
             e
         })?;
 

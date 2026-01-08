@@ -4,25 +4,47 @@ Ce fichier montre plusieurs formules LaTeX que `markdown2pdf` peut rendre.
 
 Affichage (display math):
 
+---
+
+## Formula 0: Transfer Function with Product
+
 $$
 H(s) = \prod_{i=1}^{n/2} \frac{1}{s^2 + \frac{\omega_0}{Q_i}s + \omega_0^2}
 $$
+
+---
+
+## Formula 1: Frequency Resolution Simple Fraction
 
 $$
 \Delta f = \frac{f_s}{N}
 $$
 
+---
+
+## Formula 2: Frequency Resolution with Values
+
 $$
 \Delta f = \frac{48000}{4096} \approx 11.7\ \text{Hz}
 $$
+
+---
+
+## Formula 3: Peak Frequency with Complex Numerator
 
 $$
 f_{peak} = f_k + \frac{\delta f}{2} \cdot \frac{m_{k-1} - m_{k+1}}{m_{k-1} - 2m_k + m_{k+1}}
 $$
 
+---
+
+## Formula 4: Polynomial Coefficients
+
 $$
 C = a_0 + a_1 \cdot S + a_2 \cdot S^2 + a_3 \cdot S^3 + a_4 \cdot S^4
 $$
+
+---
 
 Exemple d'équation inline: $\Delta f = \frac{f_s}{N}$.
 

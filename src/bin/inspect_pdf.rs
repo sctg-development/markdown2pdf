@@ -1,5 +1,6 @@
 use lopdf::{Document, Object};
 use std::env;
+use log::{debug, info, warn, error};
 
 fn dump_stream(obj: &Object) {
     match obj {
@@ -36,13 +37,13 @@ fn dump_stream(obj: &Object) {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: inspect_pdf <file.pdf>");
+        error!("usage: inspect_pdf <file.pdf>");
         std::process::exit(2);
     }
     let doc = match Document::load(&args[1]) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("failed to load: {:?}", e);
+            error!("failed to load: {:?}", e);
             std::process::exit(1)
         }
     };

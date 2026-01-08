@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Color;
 use syntect::parsing::{SyntaxDefinition, SyntaxSet, SyntaxSetBuilder};
+use log::{debug, info, warn, error};
 
 /// A color representation suitable for PDF rendering using RGB values.
 ///

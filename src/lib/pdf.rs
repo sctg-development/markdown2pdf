@@ -21,6 +21,7 @@ use genpdfi_extended::{
     fonts::{FontData, FontFamily},
     Alignment, Document,
 };
+use log::{info, warn};
 use std::cell::RefCell;
 
 thread_local! {
@@ -144,7 +145,7 @@ impl Pdf {
                     let primary_fonts = crate::fonts::extract_primary_fonts(&final_chain);
                     (primary_fonts, Some(final_chain))
                 } else {
-                    eprintln!("Warning: fallback chain loading failed, using single best font...");
+                    warn!("Fallback chain loading failed, using single best font...");
                     let single_font = crate::fonts::load_font_with_fallbacks(
                         family_name,
                         &fallback_fonts,
@@ -182,7 +183,7 @@ impl Pdf {
                 (single_font, None)
             }
         } else {
-            eprintln!("No font specified, searching for Unicode-capable system font...");
+            info!("No font specified, searching for Unicode-capable system font...");
             let single_font = load_unicode_system_font(all_text.as_deref()).unwrap_or_else(|_| {
                 crate::fonts::load_builtin_font_family("helvetica")
                     .expect("Failed to load fallback font family")
@@ -349,6 +350,13 @@ impl Pdf {
                     current_tokens.clear();
                     self.render_math_block(doc, content);
                 }
+                Token::Math {
+                    content: _,
+                    display: false,
+                } => {
+                    // Inline math ($...$) - treat as inline content, not block
+                    current_tokens.push(token.clone());
+                }
                 Token::HorizontalRule => {
                     self.flush_paragraph(doc, &current_tokens);
                     current_tokens.clear();
@@ -400,7 +408,7 @@ impl Pdf {
             self.style.text.before_spacing,
         ));
         let mut para = genpdfi_extended::elements::Paragraph::default();
-        self.render_inline_content(&mut para, tokens);
+        self.render_inline_content(&mut para, tokens, doc);
         doc.push(para);
         doc.push(genpdfi_extended::elements::Break::new(
             self.style.text.after_spacing,
@@ -438,7 +446,7 @@ impl Pdf {
             ));
         }
 
-        self.render_inline_content_with_style(&mut para, content, style);
+        self.render_inline_content_with_style_simple(&mut para, content, style);
         doc.push(para);
         doc.push(genpdfi_extended::elements::Break::new(
             heading_style.after_spacing,
@@ -456,6 +464,7 @@ impl Pdf {
         para: &mut genpdfi_extended::elements::Paragraph,
         tokens: &[Token],
         style: genpdfi_extended::style::Style,
+        doc: &mut Document,
     ) {
         for token in tokens {
             match token {
@@ -469,11 +478,11 @@ impl Pdf {
                         2 => nested_style = nested_style.bold(),
                         _ => nested_style = nested_style.bold().italic(),
                     }
-                    self.render_inline_content_with_style(para, content, nested_style);
+                    self.render_inline_content_with_style(para, content, nested_style, doc);
                 }
                 Token::StrongEmphasis(content) => {
                     let nested_style = style.clone().bold();
-                    self.render_inline_content_with_style(para, content, nested_style);
+                    self.render_inline_content_with_style(para, content, nested_style, doc);
                 }
                 Token::Link(text, url) => {
                     let mut link_style = style.clone();
@@ -493,8 +502,70 @@ impl Pdf {
                     }
                     para.push_styled(content.clone(), code_style);
                 }
-                Token::Math { content, display: false } => {
-                    // Inline math - render to SVG and embed as inline image
+                Token::Math {
+                    content,
+                    display: false,
+                } => {
+                    // Inline math - render to SVG and create image
+                    self.render_inline_math_as_image(doc, content);
+                }
+                Token::Image(_, _) => {
+                    // Images are handled as block-level elements in process_tokens,
+                    // not as inline elements
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Version without Document - for headings and other places where we can't render images
+    fn render_inline_content_with_style_simple(
+        &self,
+        para: &mut genpdfi_extended::elements::Paragraph,
+        tokens: &[Token],
+        style: genpdfi_extended::style::Style,
+    ) {
+        for token in tokens {
+            match token {
+                Token::Text(content) => {
+                    para.push_styled(content.clone(), style.clone());
+                }
+                Token::Emphasis { level, content } => {
+                    let mut nested_style = style.clone();
+                    match level {
+                        1 => nested_style = nested_style.italic(),
+                        2 => nested_style = nested_style.bold(),
+                        _ => nested_style = nested_style.bold().italic(),
+                    }
+                    self.render_inline_content_with_style_simple(para, content, nested_style);
+                }
+                Token::StrongEmphasis(content) => {
+                    let nested_style = style.clone().bold();
+                    self.render_inline_content_with_style_simple(para, content, nested_style);
+                }
+                Token::Link(text, url) => {
+                    let mut link_style = style.clone();
+                    if let Some(color) = self.style.link.text_color {
+                        link_style = link_style.with_color(genpdfi_extended::style::Color::Rgb(
+                            color.0, color.1, color.2,
+                        ));
+                    }
+                    para.push_link(text.clone(), url.clone(), link_style);
+                }
+                Token::Code(_, content) => {
+                    let mut code_style = style.clone();
+                    if let Some(color) = self.style.code.text_color {
+                        code_style = code_style.with_color(genpdfi_extended::style::Color::Rgb(
+                            color.0, color.1, color.2,
+                        ));
+                    }
+                    para.push_styled(content.clone(), code_style);
+                }
+                Token::Math {
+                    content,
+                    display: false,
+                } => {
+                    // Inline math - render as styled text
                     self.render_inline_math(para, content, style.clone());
                 }
                 Token::Image(_, _) => {
@@ -506,19 +577,17 @@ impl Pdf {
         }
     }
 
-    /// Renders inline content with the default text style.
-    ///
-    /// This is a convenience method that wraps render_inline_content_with_style,
-    /// using the default text style configuration. It applies the configured font size
-    /// to the content before rendering.
     fn render_inline_content(
         &self,
         para: &mut genpdfi_extended::elements::Paragraph,
         tokens: &[Token],
+        doc: &mut Document,
     ) {
         let style = genpdfi_extended::style::Style::new().with_font_size(self.style.text.size);
-        self.render_inline_content_with_style(para, tokens, style);
+        self.render_inline_content_with_style(para, tokens, style, doc);
     }
+
+    /// Renders inline content with a specified style.
 
     /// Renders a code block with appropriate styling.
     ///
@@ -654,7 +723,7 @@ impl Pdf {
             .filter(|token| !matches!(token, Token::ListItem { .. }))
             .cloned()
             .collect();
-        self.render_inline_content_with_style(&mut para, &inline_content, style);
+        self.render_inline_content_with_style_simple(&mut para, &inline_content, style);
         doc.push(para);
         doc.push(genpdfi_extended::elements::Break::new(
             self.style.list_item.after_spacing,
@@ -715,12 +784,12 @@ impl Pdf {
                 para.set_alignment(*align);
             }
 
-            self.render_inline_content_with_style(&mut para, header_cell, style);
+            self.render_inline_content_with_style_simple(&mut para, header_cell, style);
             header_row.push_element(para);
         }
 
         if let Err(_) = header_row.push() {
-            eprintln!("Warning: Failed rendering a table");
+            warn!("Failed rendering a table");
             return; // Skip the entire table if header fails
         }
 
@@ -737,12 +806,12 @@ impl Pdf {
                     para.set_alignment(*align);
                 }
 
-                self.render_inline_content_with_style(&mut para, cell_tokens, style);
+                self.render_inline_content_with_style_simple(&mut para, cell_tokens, style);
                 table_row.push_element(para);
             }
 
             if let Err(_) = table_row.push() {
-                eprintln!("Warning: Failed to push row {} in a table", row_idx);
+                warn!("Failed to push row {} in a table", row_idx);
                 continue; // Continue with next row
             }
         }
@@ -782,7 +851,7 @@ impl Pdf {
                                             doc.push(resized_image);
                                         }
                                         Err(e) => {
-                                            eprintln!("Failed to render SVG: {}", e);
+                                            warn!("Failed to render SVG: {}", e);
                                             let mut para =
                                                 genpdfi_extended::elements::Paragraph::default();
                                             let style = genpdfi_extended::style::Style::new()
@@ -797,7 +866,7 @@ impl Pdf {
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to decode SVG as UTF-8: {}", e);
+                                    warn!("Failed to decode SVG as UTF-8: {}", e);
                                     let mut para = genpdfi_extended::elements::Paragraph::default();
                                     let style = genpdfi_extended::style::Style::new()
                                         .with_font_size(self.style.text.size)
@@ -819,7 +888,7 @@ impl Pdf {
                                     doc.push(resized_image);
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to create image from data: {}", e);
+                                    warn!("Failed to create image from data: {}", e);
                                     let mut para = genpdfi_extended::elements::Paragraph::default();
                                     let style = genpdfi_extended::style::Style::new()
                                         .with_font_size(self.style.text.size)
@@ -832,7 +901,7 @@ impl Pdf {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to load image {}: {}", url, e);
+                    warn!("Failed to load image {}: {}", url, e);
                     let mut para = genpdfi_extended::elements::Paragraph::default();
                     let style = genpdfi_extended::style::Style::new()
                         .with_font_size(self.style.text.size)
@@ -858,22 +927,26 @@ impl Pdf {
     ///
     /// This method converts LaTeX mathematical expressions to SVG and embeds them
     /// as centered images in the PDF. Display math is rendered as a block-level
-    /// element with appropriate spacing.
+    /// element with appropriate spacing. The rendering uses dimensional metrics to
+    /// ensure consistent sizing with the surrounding text.
     fn render_math_block(&self, doc: &mut Document, latex_content: &str) {
         doc.push(genpdfi_extended::elements::Break::new(0.5));
 
-        // Try to render LaTeX to SVG
-        match self.safe_latex_to_svg(latex_content, true) {
-            Ok(svg_string) => {
+        // Try to render LaTeX to SVG with metrics for proper scaling
+        // Use the paragraph text size as the target height for the formula
+        let target_height = (self.style.text.size as f32) * 1.2; // Slightly taller for display mode
+        match self.safe_latex_to_svg_with_metrics(latex_content, true, target_height) {
+            Ok((svg_string, scale_factor)) => {
                 match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
                     Ok(image) => {
+                        // Apply scaling based on metrics to achieve consistent sizing
                         let resized_image = image
-                            .resizing_page_with(0.8)
+                            .resizing_page_with(0.8 * scale_factor)
                             .with_alignment(Alignment::Center);
                         doc.push(resized_image);
                     }
                     Err(e) => {
-                        eprintln!("Failed to create image from LaTeX SVG: {}", e);
+                        warn!("Failed to create image from LaTeX SVG: {}", e);
                         let mut para = genpdfi_extended::elements::Paragraph::default();
                         let style = genpdfi_extended::style::Style::new()
                             .with_font_size(self.style.text.size)
@@ -884,7 +957,7 @@ impl Pdf {
                 }
             }
             Err(e) => {
-                eprintln!("Failed to render LaTeX: {}", e);
+                warn!("Failed to render LaTeX with metrics: {}", e);
                 let mut para = genpdfi_extended::elements::Paragraph::default();
                 let style = genpdfi_extended::style::Style::new()
                     .with_font_size(self.style.text.size)
@@ -901,6 +974,7 @@ impl Pdf {
     ///
     /// This wraps the LaTeX rendering call with error handling to prevent
     /// panics from underlying C++ dependencies.
+    #[allow(dead_code)]
     fn safe_latex_to_svg(&self, content: &str, display: bool) -> Result<String, String> {
         // Use catch_unwind to protect against panics in C++ code
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -909,38 +983,86 @@ impl Pdf {
         .unwrap_or_else(|_| Err("LaTeX rendering caused an internal error".to_string()))
     }
 
+    /// Safely render LaTeX to SVG with metrics and error recovery.
+    ///
+    /// This wraps the LaTeX rendering call with metrics calculation with error handling
+    /// to prevent panics from underlying C++ dependencies. Returns both the SVG string
+    /// and a scale factor computed from the formula's dimensional metrics.
+    fn safe_latex_to_svg_with_metrics(
+        &self,
+        content: &str,
+        display: bool,
+        target_height: f32,
+    ) -> Result<(String, f32), String> {
+        // Use catch_unwind to protect against panics in C++ code
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::latex::latex_to_svg_with_metrics(content, display, target_height)
+        }))
+        .unwrap_or_else(|_| {
+            Err("LaTeX rendering with metrics caused an internal error".to_string())
+        })
+    }
+
     /// Renders inline math ($...$).
     ///
-    /// This method converts inline LaTeX expressions to SVG and displays them
-    /// as text fallback. genpdfi_extended's Paragraph API doesn't directly support
-    /// embedding images inline, so we display the LaTeX source as readable text.
+    /// This method converts inline LaTeX expressions to SVG and embeds them
+    /// as inline images in the paragraph. The rendering uses dimensional metrics
+    /// to ensure consistent sizing with the surrounding text.
+    fn render_inline_math_as_image(&self, doc: &mut Document, latex_content: &str) {
+        // Render inline math as a small SVG image
+        let target_height = (self.style.text.size as f32) * 0.9; // Slightly smaller than text
+        match self.safe_latex_to_svg_with_metrics(latex_content, false, target_height) {
+            Ok((svg_string, scale_factor)) => {
+                match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
+                    Ok(image) => {
+                        // Apply scaling and center alignment
+                        let resized_image = image
+                            .resizing_page_with(0.25 * scale_factor) // Smaller for inline
+                            .with_alignment(Alignment::Center);
+                        doc.push(resized_image);
+                    }
+                    Err(e) => {
+                        warn!("Failed to create image from inline LaTeX SVG: {}", e);
+                        let mut para = genpdfi_extended::elements::Paragraph::default();
+                        let style = genpdfi_extended::style::Style::new()
+                            .with_font_size(self.style.text.size)
+                            .italic();
+                        para.push_styled(format!("[equation]"), style);
+                        doc.push(para);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to render inline LaTeX: {}", e);
+                let mut para = genpdfi_extended::elements::Paragraph::default();
+                let style = genpdfi_extended::style::Style::new()
+                    .with_font_size(self.style.text.size)
+                    .italic();
+                para.push_styled(format!("[equation]"), style);
+                doc.push(para);
+            }
+        }
+    }
+
     fn render_inline_math(
         &self,
         para: &mut genpdfi_extended::elements::Paragraph,
         latex_content: &str,
         style: genpdfi_extended::style::Style,
     ) {
-        // Try to render, but display text fallback either way
-        match self.safe_latex_to_svg(latex_content, false) {
-            Ok(_svg_string) => {
-                // SVG was generated successfully, but since genpdfi_extended doesn't
-                // support inline images in paragraphs, we display the LaTeX source
-                // as a readable fallback with code-like styling
-                let mut math_style = style.clone();
-                if let Some(color) = self.style.code.text_color {
-                    math_style = math_style.with_color(genpdfi_extended::style::Color::Rgb(
-                        color.0, color.1, color.2,
-                    ));
-                }
-                para.push_styled(format!("${{{}}}", latex_content), math_style);
-            }
-            Err(e) => {
-                eprintln!("Failed to render inline LaTeX: {}", e);
-                // Fallback to text representation with error indicator
-                let error_style = style.clone().italic();
-                para.push_styled(format!("[LaTeX: {}]", latex_content), error_style);
-            }
+        // For inline math in paragraphs, we render the LaTeX code as styled text
+        // This ensures consistent rendering with the surrounding text and proper baseline alignment
+        let mut math_style = style.clone();
+
+        // Apply styling for code/math content
+        if let Some(color) = self.style.code.text_color {
+            math_style = math_style.with_color(genpdfi_extended::style::Color::Rgb(
+                color.0, color.1, color.2,
+            ));
         }
+
+        // Render the LaTeX source as styled text
+        para.push_styled(latex_content.to_string(), math_style);
     }
 }
 

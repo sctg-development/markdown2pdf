@@ -1492,4 +1492,48 @@ A paragraph with `code` and [link](url).
             }]
         );
     }
+
+    #[test]
+    fn test_inline_math() {
+        let tests = vec![
+            (
+                "Inline: $E = mc^2$",
+                vec![
+                    Token::Text("Inline: ".to_string()),
+                    Token::Math {
+                        content: "E = mc^2".to_string(),
+                        display: false,
+                    },
+                ],
+            ),
+            (
+                "$a + b = c$",
+                vec![Token::Math {
+                    content: "a + b = c".to_string(),
+                    display: false,
+                }],
+            ),
+        ];
+
+        for (input, expected) in tests {
+            let result = parse(input);
+            assert_eq!(result, expected, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_display_math() {
+        let tests = vec![(
+            "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$",
+            vec![Token::Math {
+                content: "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}".to_string(),
+                display: true,
+            }],
+        )];
+
+        for (input, expected) in tests {
+            let result = parse(input);
+            assert_eq!(result, expected, "Failed for input: {}", input);
+        }
+    }
 }
