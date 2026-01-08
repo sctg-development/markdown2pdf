@@ -243,7 +243,7 @@ impl Default for StyleMatch {
                 Some(0.4),
                 Some(0.4),
                 None,
-                Some("Space Mono"),
+                Some("DejaVu Sans Mono"),
                 false,
                 false,
                 false,

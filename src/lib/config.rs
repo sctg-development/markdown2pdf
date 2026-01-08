@@ -202,7 +202,7 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
 /// It processes all style sections and returns a complete StyleMatch object
 /// containing the full configuration.
 ///
-/// By default, code blocks and inline code are rendered with **Courier New** font
+/// By default, code blocks and inline code are rendered with **Space Mono** embedded font
 /// (a fixed-width font ideal for displaying code).
 ///
 /// # Arguments
@@ -222,13 +222,13 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
 /// bold = true
 ///
 /// [code]
-/// fontfamily = "Courier New"
+/// fontfamily = "Space Mono"
 /// size = 10
 /// backgroundcolor = { r = 245, g = 245, b = 245 }
 /// "#;
 /// let style = parse_config_string(config);
 /// assert_eq!(style.heading_1.size, 18);
-/// assert_eq!(style.code.font_family, Some("Courier New"));
+/// assert_eq!(style.code.font_family, Some("Space Mono"));
 /// ```
 pub fn parse_config_string(config_str: &str) -> StyleMatch {
     let config: Value = match toml::from_str(config_str) {
