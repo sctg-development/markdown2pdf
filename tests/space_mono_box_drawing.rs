@@ -11,6 +11,10 @@ fn space_mono_contains_box_drawing_glyphs() {
 
     let chars = ['├', '└', '│', '─'];
     for ch in &chars {
-        assert!(fd.has_glyph(*ch), "Expected Space Mono to have glyph for '{}', but it does not", ch);
+        assert!(
+            fd.has_glyph(*ch),
+            "Expected Space Mono to have glyph for '{}', but it does not",
+            ch
+        );
     }
 }
