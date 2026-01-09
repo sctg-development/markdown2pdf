@@ -16,10 +16,10 @@
 //! The module is designed to be both robust for production use and flexible enough to accommodate various document structures
 //! and styling needs.
 
-use crate::{fonts::load_unicode_system_font, highlighting, styling::StyleMatch, Token};
+use crate::{fonts::load_unicode_system_font, highlighting, styling::{StyleMatch, SvgWidth}, Token};
 use genpdfi_extended::{
     fonts::{FontData, FontFamily},
-    Alignment, Document,
+    Alignment, Document, Scale,
 };
 use log::{info, warn};
 use std::cell::RefCell;
@@ -825,8 +825,48 @@ impl Pdf {
     /// Renders an image token as a block-level element in the document.
     ///
     /// Attempts to load the image from the configured ImageLoader and embed it
-    /// into the PDF. For SVG images, uses native SVG rendering. For raster formats,
-    /// uses Image::from_reader(). If loading fails or no loader is configured, renders the alt text.
+    /// into the PDF. For SVG images, uses native SVG rendering with configurable sizing.
+    /// For raster formats, uses Image::from_reader(). If loading fails or no loader is
+    /// configured, renders the alt text.
+    ///
+    /// # SVG Sizing Configuration
+    ///
+    /// SVG images can be sized using the `[image.svg]` configuration section:
+    ///
+    /// - `width`: Percentage of page width (e.g., "50%")
+    ///   - When specified, completely overrides `scale_factor`
+    ///   - Example: `width = "50%"` renders at 50% of page width
+    ///
+    /// - `scale_factor`: Multiplier of original SVG dimensions (default: 1.0)
+    ///   - Only used when `width` is not specified
+    ///   - Scales the intrinsic SVG dimensions (from width/height attributes)
+    ///   - Example: `scale_factor = 2.0` renders at 200% of original size
+    ///   - Example: `scale_factor = 0.5` renders at 50% of original size
+    ///
+    /// # Priority
+    ///
+    /// If both `width` and `scale_factor` are specified, `width` takes priority
+    /// and `scale_factor` is completely ignored.
+    ///
+    /// # Examples
+    ///
+    /// With `markdown2pdfrc.toml`:
+    /// ```toml
+    /// [image.svg]
+    /// width = "50%"     # SVG will be 50% of page width
+    /// ```
+    ///
+    /// Or with scale_factor only:
+    /// ```toml
+    /// [image.svg]
+    /// scale_factor = 0.5  # SVG will be 50% of its original size
+    /// ```
+    ///
+    /// Or with scale_factor = 2.0:
+    /// ```toml
+    /// [image.svg]
+    /// scale_factor = 2.0  # SVG will be 200% of its original size
+    /// ```
     fn render_image(&self, doc: &mut Document, alt: &str, url: &str) {
         doc.push(genpdfi_extended::elements::Break::new(0.5));
 
@@ -838,15 +878,46 @@ impl Pdf {
                     // Try to load the image based on its format
                     match image_data.format {
                         crate::images::ImageFormat::Svg => {
-                            // For SVG, use native SVG rendering
+                            // For SVG, use native SVG rendering with configuration
                             match String::from_utf8(image_data.bytes.clone()) {
                                 Ok(svg_string) => {
                                     match genpdfi_extended::elements::Image::from_svg_string(
                                         &svg_string,
                                     ) {
                                         Ok(image) => {
+                                            // Apply width and scale_factor configuration
+                                            // Priority: width > scale_factor (width surcharges scale_factor)
+                                            // 
+                                            // width: percentage of page width (e.g., "50%")
+                                            //        When specified, scale_factor is completely ignored
+                                            // scale_factor: multiplier of original SVG dimensions (1.0 = original, 0.5 = 50%, 2.0 = 200%)
+                                            //              Only used when width is not specified
+                                            //              Scales the intrinsic SVG dimensions by this factor
+                                            let image = match self.style.svg_config.width {
+                                                SvgWidth::Percentage(percent) => {
+                                                    // width surcharges scale_factor
+                                                    image.resizing_page_with(percent / 100.0)
+                                                }
+                                                SvgWidth::Pixels(_pixels) => {
+                                                    // For pixel-based sizing, genpdfi only supports page-fraction sizing
+                                                    // So we can't properly implement this yet
+                                                    image
+                                                }
+                                                SvgWidth::Auto => {
+                                                    // When width is not specified, use scale_factor
+                                                    // scale_factor multiplies the intrinsic SVG dimensions
+                                                    if self.style.svg_config.scale_factor != 1.0 {
+                                                        image.with_scale(Scale::new(
+                                                            self.style.svg_config.scale_factor,
+                                                            self.style.svg_config.scale_factor,
+                                                        ))
+                                                    } else {
+                                                        image
+                                                    }
+                                                }
+                                            };
+                                            
                                             let resized_image = image
-                                                .resizing_page_with(0.8)
                                                 .with_alignment(Alignment::Center);
                                             doc.push(resized_image);
                                         }

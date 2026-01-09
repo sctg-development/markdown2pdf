@@ -164,6 +164,38 @@ underline = false
 strikethrough = false
 backgroundcolor = { r = 255, g = 255, b = 255 }
 
+# SVG image rendering configuration
+# Defines how SVG images should be sized in the PDF
+[image.svg]
+# width specifies SVG width as percentage of page width
+# When specified, scale_factor is completely ignored (width takes priority)
+#   - Format: "50%" (percentage of available page width)
+#   - Default: auto (uses original SVG dimensions)
+#   - Examples: "30%", "50%", "100%"
+# width = "50%"
+
+# height specifies SVG height (currently not fully implemented due to genpdfi limitations)
+#   - Format: "100px" (fixed pixel height)
+#   - Default: auto (maintain aspect ratio)
+# height = "100px"
+
+# scale_factor scales the SVG based on its intrinsic dimensions
+# This multiplies the original SVG width/height attributes
+# Only used when width is NOT specified
+#   - 1.0 = original SVG size (default)
+#   - 0.5 = half the original size
+#   - 2.0 = twice the original size
+#   - Must be a positive number
+# scale_factor = 1.0  # Default is 1.0
+
+# PRIORITY: width > scale_factor
+# If width is specified, scale_factor is ignored
+# Examples:
+#   - scale_factor = 0.5  → SVG rendered at 50% of original size
+#   - scale_factor = 2.0  → SVG rendered at 200% of original size
+#   - width = "50%"       → SVG rendered at 50% of page width (scale_factor ignored)
+#   - width = "50%" + scale_factor = 2.0  → Uses 50% of page width (scale_factor is ignored)
+
 # Regular paragraph text style
 [text]
 size = 8

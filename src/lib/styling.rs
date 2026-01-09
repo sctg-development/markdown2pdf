@@ -117,6 +117,50 @@ impl Default for BasicTextStyle {
     }
 }
 
+/// SVG image configuration for controlling SVG rendering in PDF.
+///
+/// This struct contains properties to control how SVG images are rendered in the PDF,
+/// including width specification (as percentage of page width or fixed pixels)
+/// and height specification (auto or fixed pixels).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SvgWidth {
+    /// Width as percentage of page width (e.g., "100%")
+    Percentage(f32),
+    /// Width as fixed pixel value (e.g., "100px" or "100")
+    Pixels(f32),
+    /// Auto width (use original SVG dimensions)
+    Auto,
+}
+
+/// SVG height configuration options.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SvgHeight {
+    /// Height as fixed pixel value
+    Pixels(f32),
+    /// Auto height (maintain aspect ratio based on width)
+    Auto,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SvgImageConfig {
+    /// Width configuration for SVG images
+    pub width: SvgWidth,
+    /// Height configuration for SVG images
+    pub height: SvgHeight,
+    /// Scale factor for proportional resizing (1.0 = no scaling, 0.5 = 50%, 2.0 = 200%)
+    pub scale_factor: f32,
+}
+
+impl Default for SvgImageConfig {
+    fn default() -> Self {
+        Self {
+            width: SvgWidth::Auto,
+            height: SvgHeight::Auto,
+            scale_factor: 1.0,
+        }
+    }
+}
+
 /// Main style configuration for mapping markdown elements to PDF styles.
 ///
 /// This struct contains style definitions for each markdown element type
@@ -151,6 +195,8 @@ pub struct StyleMatch {
     pub table_header: BasicTextStyle,
     /// Style for table cells
     pub table_cell: BasicTextStyle,
+    /// Configuration for SVG image rendering
+    pub svg_config: SvgImageConfig,
 
     // TODO: Not parsed into a actual horizontal rule currently, we need a proper styling for this
     /// Style for horizontal rules (---)
@@ -354,6 +400,7 @@ impl Default for StyleMatch {
                 false,
                 None,
             ),
+            svg_config: SvgImageConfig::default(),
         }
     }
 }

@@ -32,10 +32,10 @@ rustls-tls = ["fetch", "reqwest/rustls"]
 native-tls = ["fetch", "reqwest/native-tls"]
 
 [dependencies]
-genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended.git", package = "genpdfi_extended", features = [
-    "images",
-] } # printpdf 0.8.2
-# genpdfi_extended = { path = "./genpdfi_extended", features = ["images"] }
+genpdfi_extended = { path = "./genpdfi_extended", features = ["images"] }
+# genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended.git", package = "genpdfi_extended", features = [
+#     "images",
+# ] } # printpdf 0.8.2
 printpdf = "0.8.2"
 microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", features = [
     # "vendored-cairo",

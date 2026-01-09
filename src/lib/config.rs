@@ -83,7 +83,7 @@
 //! A complete example configuration file can be found in markdown2pdfrc.example.toml which
 //! demonstrates all available styling options.
 
-use crate::styling::{BasicTextStyle, Margins, StyleMatch, TextAlignment};
+use crate::styling::{BasicTextStyle, Margins, StyleMatch, TextAlignment, SvgImageConfig, SvgWidth, SvgHeight};
 use std::fs;
 use std::path::Path;
 use toml::Value;
@@ -195,6 +195,60 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
     style
 }
 
+/// Parses SVG image configuration from TOML.
+///
+/// Extracts the [image.svg] section and parses width and height specifications.
+/// Width can be specified as:
+/// - "100%" for percentage of page width
+/// - "100px" or just "100" for pixel values
+/// - omitted for auto (original size)
+/// Height can be specified as:
+/// - "100px" or just "100" for pixel values
+/// - omitted for auto (maintain aspect ratio)
+fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageConfig {
+    let mut config = default;
+    
+    if let Some(svg_config) = value {
+        // Parse width
+        if let Some(width_val) = svg_config.get("width") {
+            if let Some(width_str) = width_val.as_str() {
+                if width_str.ends_with("%") {
+                    if let Ok(percent) = width_str.trim_end_matches("%").parse::<f32>() {
+                        config.width = SvgWidth::Percentage(percent);
+                    }
+                } else if width_str.ends_with("px") {
+                    if let Ok(pixels) = width_str.trim_end_matches("px").parse::<f32>() {
+                        config.width = SvgWidth::Pixels(pixels);
+                    }
+                } else if let Ok(pixels) = width_str.parse::<f32>() {
+                    config.width = SvgWidth::Pixels(pixels);
+                }
+            }
+        }
+        
+        // Parse height
+        if let Some(height_val) = svg_config.get("height") {
+            if let Some(height_str) = height_val.as_str() {
+                if height_str.ends_with("px") {
+                    if let Ok(pixels) = height_str.trim_end_matches("px").parse::<f32>() {
+                        config.height = SvgHeight::Pixels(pixels);
+                    }
+                } else if let Ok(pixels) = height_str.parse::<f32>() {
+                    config.height = SvgHeight::Pixels(pixels);
+                }
+            }
+        }
+        
+        // Parse scale_factor
+        if let Some(scale_val) = svg_config.get("scale_factor") {
+            if let Some(scale) = scale_val.as_float() {
+                config.scale_factor = scale as f32;
+            }
+        }
+    }
+    config
+}
+
 /// Parses a TOML configuration string and returns a complete StyleMatch.
 ///
 /// This function handles the core TOML parsing logic and can be used with both
@@ -288,6 +342,10 @@ pub fn parse_config_string(config_str: &str) -> StyleMatch {
             default_style.table_cell,
         ),
         horizontal_rule: parse_style(config.get("horizontal_rule"), default_style.horizontal_rule),
+        svg_config: parse_svg_config(
+            config.get("image").and_then(|i| i.get("svg")),
+            default_style.svg_config,
+        ),
     }
 }
 

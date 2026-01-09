@@ -159,6 +159,58 @@ markdown2pdf -p document.md --font-path "./fonts" \
   --default-font "Roboto" --code-font "Fira Code" -o output.pdf
 ```
 
+## SVG Image Configuration
+
+SVG images embedded in Markdown can be sized using the `[image.svg]` configuration section. Control SVG rendering dimensions based on either percentage of page width or multiplier of original SVG dimensions.
+
+### Configuration Options
+
+**`width`**: Specifies SVG width as percentage of page width
+- Format: `"50%"` (percentage of available page width)
+- Default: Auto (uses original SVG dimensions)
+- When specified, completely overrides `scale_factor`
+- Examples: `"30%"`, `"50%"`, `"100%"`
+
+**`scale_factor`**: Proportional multiplier for SVG sizing based on original dimensions
+- Default: `1.0` (original SVG size from width/height attributes)
+- Scales the intrinsic SVG dimensions by this factor
+- Only used when `width` is not specified
+- Examples: `0.5` = 50% of original, `2.0` = 200% of original
+
+**Priority**: `width` parameter always takes precedence over `scale_factor`
+
+### Example Configuration
+
+```toml
+[image.svg]
+# Make all SVGs 50% of page width
+width = "50%"
+```
+
+Or scale based on original SVG size:
+
+```toml
+[image.svg]
+# Make all SVGs twice their original size
+scale_factor = 2.0
+```
+
+When both are specified, `width` wins:
+
+```toml
+[image.svg]
+width = "40%"
+scale_factor = 2.0  # This is ignored because width is specified
+```
+
+### How It Works
+
+- **`width = "50%"`**: SVG renders at 50% of the available page width, regardless of its original size
+- **`scale_factor = 0.5`**: SVG renders at 50% of its original dimensions (from SVG attributes)
+- **`scale_factor = 2.0`**: SVG renders at 200% of its original dimensions
+- **`width = "50%" + scale_factor = 2.0`**: Uses the 50% width, `scale_factor` is ignored
+
+
 ## Library Usage
 
 Two main functions: `parse_into_file()` saves PDF to disk, `parse_into_bytes()` returns bytes for web services. Both parse Markdown, apply styling, and render output.

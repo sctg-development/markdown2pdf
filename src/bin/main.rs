@@ -51,6 +51,35 @@ fn get_markdown_path(matches: &clap::ArgMatches) -> Option<PathBuf> {
     matches.get_one::<String>("path").map(PathBuf::from)
 }
 
+/// Get the configuration source based on CLI arguments or default behavior.
+///
+/// Priority order:
+/// 1. If `--config` is explicitly provided, use that file
+/// 2. If `markdown2pdfrc.toml` exists in current directory, use it
+/// 3. Otherwise use default configuration
+///
+/// # Arguments
+/// * `matches` - The parsed command-line arguments
+///
+/// # Returns
+/// A `ConfigSource` that specifies where to load configuration from
+fn get_config_source(matches: &clap::ArgMatches) -> markdown2pdf::config::ConfigSource {
+    // Check if --config was explicitly provided
+    if let Some(config_file) = matches.get_one::<String>("config") {
+        return markdown2pdf::config::ConfigSource::File(
+            Box::leak(config_file.to_string().into_boxed_str()),
+        );
+    }
+
+    // Check if markdown2pdfrc.toml exists in current directory
+    if std::path::Path::new("markdown2pdfrc.toml").exists() {
+        return markdown2pdf::config::ConfigSource::File("markdown2pdfrc.toml");
+    }
+
+    // Fall back to default configuration
+    markdown2pdf::config::ConfigSource::Default
+}
+
 fn get_output_path(matches: &clap::ArgMatches) -> Result<PathBuf, AppError> {
     let current_dir = std::env::current_dir().map_err(|e| AppError::PathError(e.to_string()))?;
 
@@ -169,12 +198,16 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
 
     // Use parse_into_file_with_images if we have a document path (for relative image resolution)
     // Otherwise use the basic parse_into_file
+    
+    // Determine configuration source based on CLI args or defaults
+    let config_source = get_config_source(&matches);
+    
     if let Some(path) = markdown_path {
         markdown2pdf::parse_into_file_with_images(
             markdown,
             output_path_str,
             &path,
-            markdown2pdf::config::ConfigSource::Default,
+            config_source,
             font_config.as_ref(),
         )
         .map_err(|e| AppError::ConversionError(e.to_string()))?;
@@ -182,7 +215,7 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
         markdown2pdf::parse_into_file(
             markdown,
             output_path_str,
-            markdown2pdf::config::ConfigSource::Default,
+            config_source,
             font_config.as_ref(),
         )
         .map_err(|e| AppError::ConversionError(e.to_string()))?;
@@ -304,6 +337,51 @@ fn main() {
             let _ = fs::remove_file(&tmp);
             assert!(res.is_ok());
         }
+
+        #[test]
+        fn test_get_config_source_explicit_config() {
+            // Test explicit --config argument takes priority
+            let cmd = Command::new("test")
+                .arg(Arg::new("config").short('c').long("config"));
+            let matches = cmd.get_matches_from(vec!["test", "--config", "custom.toml"]);
+            
+            let config_source = get_config_source(&matches);
+            match config_source {
+                markdown2pdf::config::ConfigSource::File(path) => {
+                    assert_eq!(path, "custom.toml");
+                }
+                _ => panic!("Expected File config source"),
+            }
+        }
+
+        #[test]
+        fn test_get_config_source_default_when_no_args() {
+            // Test that Default is returned when no config args and no markdown2pdfrc.toml
+            let cmd = Command::new("test")
+                .arg(Arg::new("config").short('c').long("config"));
+            let matches = cmd.get_matches_from(vec!["test"]);
+            
+            // Save current dir and change to a temp dir without markdown2pdfrc.toml
+            let original_dir = env::current_dir().unwrap();
+            let temp_dir = env::temp_dir().join("md_test_no_config");
+            let _ = fs::create_dir(&temp_dir);
+            let _ = env::set_current_dir(&temp_dir);
+            
+            // Ensure markdown2pdfrc.toml doesn't exist
+            let _ = fs::remove_file("markdown2pdfrc.toml");
+            
+            let config_source = get_config_source(&matches);
+            match config_source {
+                markdown2pdf::config::ConfigSource::Default => {
+                    // Expected
+                }
+                _ => panic!("Expected Default config source when no markdown2pdfrc.toml exists"),
+            }
+            
+            // Cleanup and restore
+            let _ = env::set_current_dir(&original_dir);
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
     }
 
     #[cfg(feature = "fetch")]
@@ -335,6 +413,13 @@ fn main() {
                 .long("output")
                 .value_name("OUTPUT_PATH")
                 .help("Path to the output PDF file (defaults to ./output.pdf)"),
+        )
+        .arg(
+            Arg::new("config")
+                .short('c')
+                .long("config")
+                .value_name("CONFIG_FILE")
+                .help("Path to configuration file (TOML format). Auto-detects markdown2pdfrc.toml if not specified"),
         )
         .arg(
             Arg::new("font-path")
