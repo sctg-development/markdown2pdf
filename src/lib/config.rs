@@ -241,7 +241,14 @@ fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageC
         
         // Parse scale_factor
         if let Some(scale_val) = svg_config.get("scale_factor") {
-            if let Some(scale) = scale_val.as_float() {
+            let scale_f = if let Some(f) = scale_val.as_float() {
+                Some(f)
+            } else if let Some(i) = scale_val.as_integer() {
+                Some(i as f64)
+            } else {
+                None
+            };
+            if let Some(scale) = scale_f {
                 config.scale_factor = scale as f32;
             }
         }
