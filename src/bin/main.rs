@@ -282,6 +282,13 @@ fn main() {
         }
 
         #[test]
+        fn test_list_embedded_flag() {
+            let cmd = Command::new("test").arg(Arg::new("list-embedded-fonts").long("list-embedded-fonts"));
+            let matches = cmd.get_matches_from(vec!["test", "--list-embedded-fonts"]);
+            assert!(matches.get_flag("list-embedded-fonts"));
+        }
+
+        #[test]
         fn test_run_dry_run_returns_ok() {
             let tmp = env::temp_dir().join("md_test_run.md");
             fs::write(&tmp, "# Small").unwrap();
@@ -376,9 +383,25 @@ fn main() {
                 .long("dry-run")
                 .help("Validate input without generating PDF")
                 .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("list-embedded-fonts")
+                .short('E')
+                .long("list-embedded-fonts")
+                .help("List embedded binary fonts and exit")
+                .action(clap::ArgAction::SetTrue),
         );
 
     let matches = cmd.clone().get_matches();
+
+    // Handle listing of embedded fonts early so the option can be used without other inputs
+    if matches.get_flag("list-embedded-fonts") {
+        // Print canonical embedded family names
+        for f in markdown2pdf::embedded_fonts::known_embedded_families() {
+            println!("{}", f);
+        }
+        process::exit(0);
+    }
 
     #[cfg(feature = "fetch")]
     let has_url = matches.contains_id("url");
