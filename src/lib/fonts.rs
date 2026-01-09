@@ -34,27 +34,26 @@ fn get_font_aliases(name: &str) -> Vec<&'static str> {
 // These are prioritized over system fonts when available.
 // -----------------------------------------------------------------------------
 
-// Monospace (fixed-width) - Space Mono
-static SPACE_MONO_REGULAR: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Regular.ttf");
-static SPACE_MONO_BOLD: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Bold.ttf");
-static SPACE_MONO_ITALIC: &'static [u8] = include_bytes!("../../fonts/SpaceMono-Italic.ttf");
-static SPACE_MONO_BOLD_ITALIC: &'static [u8] =
-    include_bytes!("../../fonts/SpaceMono-BoldItalic.ttf");
+// Monospace (fixed-width) - DejaVu Sans Mono
+static MONO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono.ttf");
+static MONO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Bold.ttf");
+static MONO_SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Oblique.ttf");
+static MONO_SANS_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/DejaVuSansMono-BoldOblique.ttf");
 
-// Sans-serif - Noto Sans
-static NOTO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/NotoSans-Regular.ttf");
-static NOTO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/NotoSans-Bold.ttf");
-static NOTO_SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/NotoSans-Italic.ttf");
-static NOTO_SANS_BOLD_ITALIC: &'static [u8] = include_bytes!("../../fonts/NotoSans-BoldItalic.ttf");
+// Sans-serif - DejaVu Sans
+static SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
+static SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Bold.ttf");
+static SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Oblique.ttf");
+static SANS_BOLD_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-BoldOblique.ttf");
 
-// Monospace alternative - Courier Prime (also included)
-static COURIER_PRIME_REGULAR: &'static [u8] =
-    include_bytes!("../../fonts/CourierPrime-Regular.ttf");
-static COURIER_PRIME_BOLD: &'static [u8] = include_bytes!("../../fonts/CourierPrime-Bold.ttf");
-static COURIER_PRIME_ITALIC: &'static [u8] = include_bytes!("../../fonts/CourierPrime-Italic.ttf");
-static COURIER_PRIME_BOLD_ITALIC: &'static [u8] =
-    include_bytes!("../../fonts/CourierPrime-BoldItalic.ttf");
-
+// Monospace alternative - CMU Typewriter (also included)
+static MONO_SERIF_REGULAR: &'static [u8] =
+    include_bytes!("../../fonts/CMU Typewriter Text Regular.ttf");
+static MONO_SERIF_BOLD: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Bold.ttf");
+static MONO_SERIF_ITALIC: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Italic.ttf");
+static MONO_SERIF_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/CMU Typewriter Text Bold Italic.ttf");
 /// Attempt to build a `FontFamily<FontData>` from the embedded fonts.
 fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     let key = name.to_lowercase();
@@ -93,10 +92,10 @@ fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     .contains(&key.as_str())
     {
         return mk_family(
-            SPACE_MONO_REGULAR,
-            SPACE_MONO_BOLD,
-            SPACE_MONO_ITALIC,
-            SPACE_MONO_BOLD_ITALIC,
+            MONO_SANS_REGULAR,
+            MONO_SANS_BOLD,
+            MONO_SANS_ITALIC,
+            MONO_SANS_BOLD_ITALIC,
         );
     }
 
@@ -111,10 +110,10 @@ fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     .contains(&key.as_str())
     {
         return mk_family(
-            NOTO_SANS_REGULAR,
-            NOTO_SANS_BOLD,
-            NOTO_SANS_ITALIC,
-            NOTO_SANS_BOLD_ITALIC,
+            SANS_REGULAR,
+            SANS_BOLD,
+            SANS_ITALIC,
+            SANS_BOLD_ITALIC,
         );
     }
 
@@ -128,10 +127,10 @@ fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     .contains(&key.as_str())
     {
         return mk_family(
-            COURIER_PRIME_REGULAR,
-            COURIER_PRIME_BOLD,
-            COURIER_PRIME_ITALIC,
-            COURIER_PRIME_BOLD_ITALIC,
+            MONO_SERIF_REGULAR,
+            MONO_SERIF_BOLD,
+            MONO_SERIF_ITALIC,
+            MONO_SERIF_BOLD_ITALIC,
         );
     }
 
@@ -181,7 +180,7 @@ mod tests {
         let family = family.unwrap();
         assert_eq!(
             family.regular.get_data().unwrap().len(),
-            SPACE_MONO_REGULAR.len()
+            MONO_SANS_REGULAR.len()
         );
     }
 
@@ -195,7 +194,7 @@ mod tests {
         let family = family.unwrap();
         assert_eq!(
             family.regular.get_data().unwrap().len(),
-            NOTO_SANS_REGULAR.len()
+            SANS_REGULAR.len()
         );
     }
 
@@ -209,7 +208,7 @@ mod tests {
         let family = family.unwrap();
         assert_eq!(
             family.regular.get_data().unwrap().len(),
-            COURIER_PRIME_REGULAR.len()
+            MONO_SERIF_REGULAR.len()
         );
     }
 }
