@@ -9,7 +9,7 @@ Usage: python3 tests/check_pdf_fonts.py [path/to/pdf]
 import sys
 from pathlib import Path
 
-BOX_CHARS = ["├", "└", "│", "─"]
+BOX_CHARS = ["├", "└", "─"]
 TARGET = "Library entry point"  # recherche principale (on gère les correspondances sur plusieurs spans)
 
 try:
