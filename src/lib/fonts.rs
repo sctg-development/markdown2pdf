@@ -81,13 +81,18 @@ fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
 fn find_embedded_family_and_name(name: &str) -> Option<(FontFamily<FontData>, &'static str)> {
     let key = name.to_ascii_lowercase();
 
-    // Map legacy names to canonical names first
+    // Map legacy and common PDF/base names to canonical embedded names first
     let canonical = if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier") {
         "CMU Typewriter Text"
     } else if key.contains("noto") || key.contains("noto-sans") {
         "DejaVu Sans"
     } else if (key.contains("space") && key.contains("mono")) || key == "space-mono" || key == "spacemono" {
         "DejaVu Sans Mono"
+    // Map common PDF base families to the embedded equivalents
+    } else if key.contains("helvetica") || key.contains("arial") || key.contains("sans") || key.contains("sans-serif") {
+        "DejaVu Sans"
+    } else if key.contains("times") || key.contains("timesnewroman") || key.contains("times new roman") || key.contains("serif") {
+        "DejaVu Serif"
     } else {
         // Try to match explicit canonical names provided by embedded_fonts
         for k in crate::embedded_fonts::known_embedded_families() {
@@ -175,6 +180,40 @@ mod tests {
             family.regular.get_data().unwrap().len(),
             MONO_SERIF_REGULAR.len()
         );
+    }
+
+    #[test]
+    fn test_embedded_helvetica_maps_to_dejavu_sans() {
+        if let Some((family, canon)) = find_embedded_family_and_name("Helvetica") {
+            assert_eq!(canon, "DejaVu Sans");
+            assert_eq!(family.regular.get_data().unwrap().len(), SANS_REGULAR.len());
+        } else {
+            panic!("Helvetica should map to an embedded DejaVu Sans family");
+        }
+    }
+
+    #[test]
+    fn test_embedded_times_maps_to_dejavu_serif() {
+        if let Some((family, canon)) = find_embedded_family_and_name("Times") {
+            assert_eq!(canon, "DejaVu Serif");
+            assert_eq!(family.regular.get_data().unwrap().len(), {
+                // Use embedded helper directly to get expected size
+                let expected = crate::embedded_fonts::try_embedded_font_family("DejaVu Serif").unwrap();
+                expected.regular.get_data().unwrap().len()
+            });
+        } else {
+            panic!("Times should map to an embedded DejaVu Serif family");
+        }
+    }
+
+    #[test]
+    fn test_embedded_courier_maps_to_cmu_typewriter() {
+        if let Some((family, canon)) = find_embedded_family_and_name("Courier") {
+            assert_eq!(canon, "CMU Typewriter Text");
+            assert_eq!(family.regular.get_data().unwrap().len(), MONO_SERIF_REGULAR.len());
+        } else {
+            panic!("Courier should map to an embedded CMU Typewriter family");
+        }
     }
 }
 

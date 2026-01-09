@@ -138,6 +138,13 @@ Fallback font chains specify multiple fonts tried in sequence for missing charac
 
 When non-ASCII characters are detected, the library prioritizes DejaVu Sans, Noto Sans, and Liberation Sans. Coverage percentages are reported with suggestions if fonts lack support.
 
+Note on PDF standard fonts: standard PDF base families (e.g., "Helvetica", "Times", "Courier") are mapped to embedded binary families when available:
+- "Helvetica"/"Arial" → **DejaVu Sans**
+- "Times"/"Times New Roman"/"Serif" → **DejaVu Serif**
+- "Courier"/"Courier New"/"Monospace" → **CMU Typewriter Text**
+
+Use `--list-embedded-fonts` (or `-E`) to print a list of embedded families bundled with the binary.
+
 The system loads actual Bold, Italic, and Bold-Italic font files rather than synthetic rendering. Font name resolution includes fuzzy matching and aliasing for cross-platform compatibility. "Arial" automatically maps to Helvetica on macOS.
 
 Custom fonts load from directories via `--font-path` with recursive search for TrueType and OpenType fonts.
