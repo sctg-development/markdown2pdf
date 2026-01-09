@@ -44,9 +44,9 @@ fn test_binary_accepts_font_flags() {
         .arg("# Hello")
         .arg("--dry-run")
         .arg("--default-font")
-        .arg("Noto Sans")
+        .arg("DejaVu Sans")
         .arg("--fallback-font")
-        .arg("CourierPrime");
+        .arg("CMU Typewriter Text");
 
     cmd.assert().success();
 }

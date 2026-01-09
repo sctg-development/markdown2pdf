@@ -59,7 +59,7 @@ impl ValidationWarning {
                 "Document contains Unicode characters (e.g., '{}') but no Unicode font specified",
                 sample
             ),
-            suggestion: "Consider using --default-font 'Noto Sans' or specifying fallback fonts for better rendering".to_string(),
+                suggestion: "Consider using --default-font 'DejaVu Sans' or specifying fallback fonts for better rendering".to_string(),
         }
     }
 

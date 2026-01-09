@@ -132,11 +132,11 @@ Use `--verbose` for detailed font selection output, `--quiet` for CI/CD pipeline
 
 ## Font Handling and Unicode Support
 
-The library automatically detects Unicode characters and selects system fonts with good coverage. Font subsetting reduces PDF size by 98% by including only used glyphs. A document with Noto Sans embeds ~31 KB instead of 1.2 MB.
+The library automatically detects Unicode characters and selects system fonts with good coverage. Font subsetting reduces PDF size by 98% by including only used glyphs. A document with DejaVu Sans embeds ~31 KB instead of 1.2 MB.
 
 Fallback font chains specify multiple fonts tried in sequence for missing characters. Useful for mixed-script documents with Latin, Cyrillic, Greek, or CJK. The system analyzes each character and selects the best font from the chain.
 
-When non-ASCII characters are detected, the library prioritizes Noto Sans, DejaVu Sans, and Liberation Sans. Coverage percentages are reported with suggestions if fonts lack support.
+When non-ASCII characters are detected, the library prioritizes DejaVu Sans, Noto Sans, and Liberation Sans. Coverage percentages are reported with suggestions if fonts lack support.
 
 The system loads actual Bold, Italic, and Bold-Italic font files rather than synthetic rendering. Font name resolution includes fuzzy matching and aliasing for cross-platform compatibility. "Arial" automatically maps to Helvetica on macOS.
 
@@ -144,7 +144,7 @@ Custom fonts load from directories via `--font-path` with recursive search for T
 
 ```bash
 # Unicode with fallback chain
-markdown2pdf -p international.md --default-font "Noto Sans" \
+markdown2pdf -p international.md --default-font "DejaVu Sans" \
   --fallback-font "Arial Unicode MS" -o output.pdf
 
 # Custom fonts with subsetting

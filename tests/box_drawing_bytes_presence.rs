@@ -91,6 +91,9 @@ rust/src/
     font_cfg.code_font = Some("DejaVuSansMono".to_string());
     let result =
         markdown2pdf::parse_into_bytes(markdown, config::ConfigSource::Default, Some(&font_cfg));
+    if let Err(e) = &result {
+        eprintln!("render error: {:?}", e);
+    }
     assert!(result.is_ok(), "Failed to render markdown to PDF bytes");
     let pdf_bytes = result.unwrap();
 

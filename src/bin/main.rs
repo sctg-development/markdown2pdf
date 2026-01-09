@@ -219,9 +219,9 @@ fn main() {
         .after_help(
             "EXAMPLES:\n  \
             markdown2pdf -p document.md -o output.pdf\n  \
-            markdown2pdf -s \"# Hello World\" --default-font \"Noto Sans\"\n  \
+            markdown2pdf -s \"# Hello World\" --default-font \"DejaVu Sans\"\n  \
             markdown2pdf -p doc.md --verbose --dry-run\n  \
-            markdown2pdf -p unicode.md --default-font \"Arial\" --fallback-font \"Noto Sans\"\n",
+            markdown2pdf -p unicode.md --default-font \"Arial\" --fallback-font \"DejaVu Sans\"\n",
         )
         .arg({
             let arg = Arg::new("path")

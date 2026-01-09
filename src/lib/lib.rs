@@ -107,6 +107,7 @@
 
 pub mod config;
 mod debug;
+pub mod embedded_fonts;
 pub mod fonts;
 pub mod highlighting;
 pub mod images;

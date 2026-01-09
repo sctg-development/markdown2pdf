@@ -54,87 +54,52 @@ static MONO_SERIF_BOLD: &'static [u8] = include_bytes!("../../fonts/CMU Typewrit
 static MONO_SERIF_ITALIC: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Italic.ttf");
 static MONO_SERIF_BOLD_ITALIC: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Bold Italic.ttf");
-/// Attempt to build a `FontFamily<FontData>` from the embedded fonts.
+/// Attempt to discover an embedded font family, mapping legacy names
+/// such as "CourierPrime", "Noto Sans" and "space-mono" to the canonical
+/// embedded families implemented in `embedded_fonts.rs`.
 fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
-    let key = name.to_lowercase();
+    let key = name.to_ascii_lowercase();
 
-    // Helper to build FontFamily given static slices (may return None on error)
-    let mk_family = |regular: &'static [u8],
-                     bold: &'static [u8],
-                     italic: &'static [u8],
-                     bold_italic: &'static [u8]| {
-        let reg = Arc::new(regular.to_vec());
-        let b = Arc::new(bold.to_vec());
-        let i = Arc::new(italic.to_vec());
-        let bi = Arc::new(bold_italic.to_vec());
-        let mk = || -> Result<FontFamily<FontData>, Error> {
-            Ok(FontFamily {
-                regular: FontData::new_shared(reg.clone(), None)?,
-                bold: FontData::new_shared(b.clone(), None)?,
-                italic: FontData::new_shared(i.clone(), None)?,
-                bold_italic: FontData::new_shared(bi.clone(), None)?,
-            })
-        };
+    // Map common legacy names to the canonical embedded family names
+    if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier") {
+        return crate::embedded_fonts::try_embedded_font_family("CMU Typewriter Text");
+    }
 
-        mk().ok()
+    if key.contains("noto") || key.contains("noto-sans") {
+        return crate::embedded_fonts::try_embedded_font_family("DejaVu Sans");
+    }
+
+    if key.contains("space") && key.contains("mono") || key == "space-mono" || key == "spacemono" {
+        return crate::embedded_fonts::try_embedded_font_family("DejaVu Sans Mono");
+    }
+
+    // Allow passing canonical/explicit names directly to the embedded helper
+    crate::embedded_fonts::try_embedded_font_family(name)
+}
+
+/// Find an embedded family and return it along with the canonical family name
+fn find_embedded_family_and_name(name: &str) -> Option<(FontFamily<FontData>, &'static str)> {
+    let key = name.to_ascii_lowercase();
+
+    // Map legacy names to canonical names first
+    let canonical = if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier") {
+        "CMU Typewriter Text"
+    } else if key.contains("noto") || key.contains("noto-sans") {
+        "DejaVu Sans"
+    } else if (key.contains("space") && key.contains("mono")) || key == "space-mono" || key == "spacemono" {
+        "DejaVu Sans Mono"
+    } else {
+        // Try to match explicit canonical names provided by embedded_fonts
+        for k in crate::embedded_fonts::known_embedded_families() {
+            if name.to_ascii_lowercase().contains(&k.to_ascii_lowercase()) || k.to_ascii_lowercase().contains(&name.to_ascii_lowercase()) {
+                return crate::embedded_fonts::try_embedded_font_family(k).map(|f| (f, k));
+            }
+        }
+        // No match
+        return None;
     };
 
-    if [
-        "space mono",
-        "space-mono",
-        "spacemono",
-        "space_mono",
-        "spacemono",
-        "spacemono",
-        "mono",
-        "monospace",
-    ]
-    .contains(&key.as_str())
-    {
-        return mk_family(
-            MONO_SANS_REGULAR,
-            MONO_SANS_BOLD,
-            MONO_SANS_ITALIC,
-            MONO_SANS_BOLD_ITALIC,
-        );
-    }
-
-    if [
-        "noto sans",
-        "noto-sans",
-        "noto",
-        "noto sans",
-        "sans",
-        "sans-serif",
-    ]
-    .contains(&key.as_str())
-    {
-        return mk_family(
-            SANS_REGULAR,
-            SANS_BOLD,
-            SANS_ITALIC,
-            SANS_BOLD_ITALIC,
-        );
-    }
-
-    if [
-        "courierprime",
-        "courier-prime",
-        "courier prime",
-        "courier",
-        "courier new",
-    ]
-    .contains(&key.as_str())
-    {
-        return mk_family(
-            MONO_SERIF_REGULAR,
-            MONO_SERIF_BOLD,
-            MONO_SERIF_ITALIC,
-            MONO_SERIF_BOLD_ITALIC,
-        );
-    }
-
-    None
+    crate::embedded_fonts::try_embedded_font_family(canonical).map(|f| (f, canonical))
 }
 
 #[cfg(test)]
@@ -189,7 +154,7 @@ mod tests {
         let family = try_embedded_font_family("noto-sans");
         assert!(
             family.is_some(),
-            "Embedded NotoSans family should be available"
+            "Embedded DejaVuSans family should be available"
         );
         let family = family.unwrap();
         assert_eq!(
@@ -203,7 +168,7 @@ mod tests {
         let family = try_embedded_font_family("courier-prime");
         assert!(
             family.is_some(),
-            "Embedded CourierPrime family should be available"
+            "Embedded CMU Typewriter family should be available"
         );
         let family = family.unwrap();
         assert_eq!(
@@ -440,8 +405,8 @@ fn load_system_font_bytes_fallback(candidates: &[&str]) -> Result<Vec<u8>, Error
 /// can decide how to proceed (e.g. fall back to a built-in font).
 pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>, Error> {
     // Prefer embedded fonts from `fonts/` if available
-    if let Some(family) = try_embedded_font_family(name) {
-        eprintln!("✓ Using embedded font family for '{}'", name);
+    if let Some((family, canon)) = find_embedded_family_and_name(name) {
+        eprintln!("✓ Using embedded font family '{}'", canon);
         return Ok(family);
     }
 
@@ -637,9 +602,9 @@ pub fn load_custom_font_family(
 /// Searches for a specific font variant file in custom paths.
 ///
 /// Tries multiple naming patterns for font variants:
-/// - NotoSans-Bold.ttf
-/// - NotoSansBold.ttf
-/// - NotoSans_Bold.ttf
+/// - DejaVuSans-Bold.ttf
+/// - DejaVuSansBold.ttf
+/// - DejaVuSans_Bold.ttf
 /// - notosans-bold.ttf
 ///
 /// Also tries font name aliases (e.g., Arial -> Helvetica)
@@ -653,7 +618,11 @@ fn find_font_variant_in_paths(
     candidates.extend(aliases);
 
     for candidate in candidates {
-        let base_lower = candidate.to_lowercase().replace(" ", "");
+        let base_raw = candidate.to_lowercase();
+        let base_no_space = base_raw.replace(" ", "");
+        let base_dash = base_raw.replace(" ", "-");
+        let base_underscore = base_raw.replace(" ", "_");
+        let bases = vec![base_raw.as_str(), base_no_space.as_str(), base_dash.as_str(), base_underscore.as_str()];
 
         for custom_path in custom_paths {
             if !custom_path.is_dir() {
@@ -684,30 +653,33 @@ fn find_font_variant_in_paths(
                         continue;
                     }
 
-                    let patterns = if suffix.is_empty() {
-                        vec![format!("{}.ttf", base_lower), format!("{}.otf", base_lower)]
-                    } else {
-                        vec![
-                            format!("{}-{}.ttf", base_lower, suffix.to_lowercase()),
-                            format!("{}{}.ttf", base_lower, suffix.to_lowercase()),
-                            format!("{}_{}.ttf", base_lower, suffix.to_lowercase()),
-                            format!("{} {}.ttf", base_lower, suffix.to_lowercase()),
-                            format!("{}-{}.otf", base_lower, suffix.to_lowercase()),
-                            format!("{}{}.otf", base_lower, suffix.to_lowercase()),
-                        ]
-                    };
+                    for base in &bases {
+                        let patterns = if suffix.is_empty() {
+                            vec![format!("{}.ttf", base), format!("{}.otf", base)]
+                        } else {
+                            let suf = suffix.to_lowercase();
+                            vec![
+                                format!("{}-{}.ttf", base, suf),
+                                format!("{}{}.ttf", base, suf),
+                                format!("{}_{}.ttf", base, suf),
+                                format!("{} {}.ttf", base, suf),
+                                format!("{}-{}.otf", base, suf),
+                                format!("{}{}.otf", base, suf),
+                            ]
+                        };
 
-                    for pattern in &patterns {
-                        if file_lower.contains(pattern) || file_lower == *pattern {
-                            if let Ok(bytes) = fs::read(&path) {
-                                if Font::try_from_bytes(&bytes).is_some() {
-                                    if candidate != base_name {
-                                        eprintln!(
-                                            "  ℹ Found '{}' variant as alias for '{}'",
-                                            candidate, base_name
-                                        );
+                        for pattern in &patterns {
+                            if file_lower.contains(pattern) || file_lower == *pattern {
+                                if let Ok(bytes) = fs::read(&path) {
+                                    if Font::try_from_bytes(&bytes).is_some() {
+                                        if candidate != base_name {
+                                            eprintln!(
+                                                "  ℹ Found '{}' variant as alias for '{}'",
+                                                candidate, base_name
+                                            );
+                                        }
+                                        return Some(bytes);
                                     }
-                                    return Some(bytes);
                                 }
                             }
                         }
@@ -824,12 +796,11 @@ pub fn load_font_with_config(
     let enable_subsetting = config.map(|c| c.enable_subsetting).unwrap_or(false);
 
     // Prefer embedded fonts (statically included in `fonts/`) if available
-    if let Some(family) = try_embedded_font_family(name) {
-        eprintln!(
-            "✓ Using embedded font family for '{}' (load_font_with_config)",
-            name
-        );
-        return apply_subsetting_if_enabled(family, enable_subsetting, text);
+    // Embedded fonts are shipped with the project and are considered safe – skip
+    // subsetting for embedded fonts to avoid producing invalid font binaries.
+    if let Some((family, canon)) = find_embedded_family_and_name(name) {
+        eprintln!("✓ Using embedded font family '{}' (load_font_with_config)", canon);
+        return Ok(family);
     }
 
     // Check if fallback fonts are specified - if so, return a chain-based result
@@ -1091,32 +1062,32 @@ pub fn load_unicode_system_font(text: Option<&str>) -> Result<FontFamily<FontDat
     // Try each Unicode font
     for font_name in &unicode_fonts {
         // If an embedded font exists for this name, prefer it and report appropriately
-        if let Some(embedded_family) = try_embedded_font_family(font_name) {
+        if let Some((embedded_family, canon)) = find_embedded_family_and_name(font_name) {
             // If text provided, check coverage
             if let Some(text) = text {
                 let coverage = embedded_family.regular.check_coverage(text);
                 if coverage.coverage_percent() >= 98f32 {
                     eprintln!(
                         "✓ Using embedded font '{}' ({:.1}% coverage)",
-                        font_name,
+                        canon,
                         coverage.coverage_percent()
                     );
                     return Ok(embedded_family);
                 } else {
                     eprintln!(
                         "⚠ Embedded font '{}' has only {:.1}% coverage, trying next...",
-                        font_name,
+                        canon,
                         coverage.coverage_percent()
                     );
                     tried_fonts.push(format!(
                         "{} ({:.1}% coverage)",
-                        font_name,
+                        canon,
                         coverage.coverage_percent()
                     ));
                     // continue to try system fonts/fallbacks
                 }
             } else {
-                eprintln!("✓ Using embedded font '{}'", font_name);
+                eprintln!("✓ Using embedded font '{}'", canon);
                 return Ok(embedded_family);
             }
         } else if let Ok(family) = load_system_font_family_simple(font_name) {
@@ -1515,7 +1486,7 @@ mod fonts_integration_tests {
     #[test]
     fn test_load_custom_font_family_from_fonts_dir() {
         let fonts = fonts_dir();
-        let family = load_custom_font_family("NotoSans", &[fonts.clone()]);
+        let family = load_custom_font_family("DejaVuSans", &[fonts.clone()]);
         assert!(family.is_ok());
         let family = family.unwrap();
         let data = family.regular.get_data().unwrap();
@@ -1525,16 +1496,16 @@ mod fonts_integration_tests {
     #[test]
     fn test_find_font_variant_in_paths_finds_variants() {
         let fonts = fonts_dir();
-        let regular = find_font_variant_in_paths("NotoSans", FontVariant::Regular, &[fonts.clone()]);
+        let regular = find_font_variant_in_paths("DejaVuSans", FontVariant::Regular, &[fonts.clone()]);
         assert!(regular.is_some());
-        let bold = find_font_variant_in_paths("NotoSans", FontVariant::Bold, &[fonts.clone()]);
+        let bold = find_font_variant_in_paths("DejaVuSans", FontVariant::Bold, &[fonts.clone()]);
         assert!(bold.is_some());
     }
 
     #[test]
     fn test_load_font_family_with_variants_from_fonts_dir() {
         let fonts = fonts_dir();
-        let family = load_font_family_with_variants("CourierPrime", &[fonts.clone()]);
+        let family = load_font_family_with_variants("CMU Typewriter Text", &[fonts.clone()]);
         assert!(family.is_ok());
         let family = family.unwrap();
         // Bold/Italic should exist (may fallback to regular)
@@ -1545,7 +1516,7 @@ mod fonts_integration_tests {
     #[test]
     fn test_apply_subsetting_if_enabled_reduces_or_matches_size() {
         let fonts = fonts_dir();
-        let family = load_custom_font_family("NotoSans", &[fonts]).unwrap();
+        let family = load_custom_font_family("DejaVuSans", &[fonts]).unwrap();
         let original_len = family.regular.get_data().unwrap().len();
 
         let subset = apply_subsetting_if_enabled(family, true, Some("Hello world"));
@@ -1566,8 +1537,8 @@ mod fonts_integration_tests {
     fn test_load_font_with_fallback_chain_and_fallbacks() {
         let fonts = fonts_dir();
         let chain = load_font_with_fallback_chain(
-            "Noto Sans",
-            &vec!["CourierPrime".to_string()],
+            "DejaVu Sans",
+            &vec!["CMU Typewriter Text".to_string()],
             &[fonts.clone()],
             Some("Hello world"),
         );
@@ -1614,7 +1585,7 @@ mod fonts_integration_tests {
         let fonts = fonts_dir();
         let chain = load_font_with_fallback_chain(
             "Noto Sans",
-            &vec!["CourierPrime".to_string()],
+            &vec!["CMU Typewriter Text".to_string()],
             &[fonts],
             None,
         )
@@ -1652,8 +1623,8 @@ mod fonts_integration_tests {
     fn test_apply_subsetting_to_chain_skips_unused_fallbacks() {
         let fonts = fonts_dir();
         let chain = load_font_with_fallback_chain(
-            "Noto Sans",
-            &vec!["CourierPrime".to_string()],
+            "DejaVu Sans",
+            &vec!["CMU Typewriter Text".to_string()],
             &[fonts.clone()],
             None,
         )
