@@ -16,7 +16,12 @@
 //! The module is designed to be both robust for production use and flexible enough to accommodate various document structures
 //! and styling needs.
 
-use crate::{fonts::load_unicode_system_font, highlighting, styling::{StyleMatch, SvgWidth}, Token};
+use crate::{
+    fonts::load_unicode_system_font,
+    highlighting,
+    styling::{StyleMatch, SvgWidth},
+    Token,
+};
 use genpdfi_extended::{
     fonts::{FontData, FontFamily},
     Alignment, Document, Scale,
@@ -382,6 +387,12 @@ impl Pdf {
                     self.flush_paragraph(doc, &current_tokens);
                     current_tokens.clear();
                     self.render_image(doc, alt, url);
+                }
+                Token::ImageWithLink(alt, image_url, link_url) => {
+                    // Treat images with link as block-level elements
+                    self.flush_paragraph(doc, &current_tokens);
+                    current_tokens.clear();
+                    self.render_image_with_link(doc, alt, image_url, link_url);
                 }
                 _ => {
                     current_tokens.push(token.clone());
@@ -887,7 +898,7 @@ impl Pdf {
                                         Ok(image) => {
                                             // Apply width and scale_factor configuration
                                             // Priority: width > scale_factor (width surcharges scale_factor)
-                                            // 
+                                            //
                                             // width: percentage of page width (e.g., "50%")
                                             //        When specified, scale_factor is completely ignored
                                             // scale_factor: multiplier of original SVG dimensions (1.0 = original, 0.5 = 50%, 2.0 = 200%)
@@ -916,9 +927,9 @@ impl Pdf {
                                                     }
                                                 }
                                             };
-                                            
-                                            let resized_image = image
-                                                .with_alignment(Alignment::Center);
+
+                                            let resized_image =
+                                                image.with_alignment(Alignment::Center);
                                             doc.push(resized_image);
                                         }
                                         Err(e) => {
@@ -973,6 +984,130 @@ impl Pdf {
                 }
                 Err(e) => {
                     warn!("Failed to load image {}: {}", url, e);
+                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                    let style = genpdfi_extended::style::Style::new()
+                        .with_font_size(self.style.text.size)
+                        .italic();
+                    para.push_styled(format!("[Image not found: {}]", alt), style);
+                    doc.push(para);
+                }
+            }
+        } else {
+            // No loader configured, just show alt text
+            let mut para = genpdfi_extended::elements::Paragraph::default();
+            let style = genpdfi_extended::style::Style::new()
+                .with_font_size(self.style.text.size)
+                .italic();
+            para.push_styled(format!("[Image: {}]", alt), style);
+            doc.push(para);
+        }
+
+        doc.push(genpdfi_extended::elements::Break::new(0.5));
+    }
+
+    /// Renders an image with a hyperlink ([![alt](image)](url))
+    fn render_image_with_link(
+        &self,
+        doc: &mut Document,
+        alt: &str,
+        image_url: &str,
+        link_url: &str,
+    ) {
+        doc.push(genpdfi_extended::elements::Break::new(0.5));
+
+        let mut loader_opt = self.image_loader.borrow_mut();
+
+        if let Some(ref mut loader) = *loader_opt {
+            match loader.load(image_url) {
+                Ok(image_data) => {
+                    // Try to load the image based on its format
+                    match image_data.format {
+                        crate::images::ImageFormat::Svg => {
+                            // For SVG, use native SVG rendering with configuration
+                            match String::from_utf8(image_data.bytes.clone()) {
+                                Ok(svg_string) => {
+                                    match genpdfi_extended::elements::Image::from_svg_string(
+                                        &svg_string,
+                                    ) {
+                                        Ok(image) => {
+                                            // Apply width and scale_factor configuration
+                                            let image = match self.style.svg_config.width {
+                                                SvgWidth::Percentage(percent) => {
+                                                    image.resizing_page_with(percent / 100.0)
+                                                }
+                                                SvgWidth::Pixels(_pixels) => {
+                                                    image
+                                                }
+                                                SvgWidth::Auto => {
+                                                    if self.style.svg_config.scale_factor != 1.0 {
+                                                        image.with_scale(Scale::new(
+                                                            self.style.svg_config.scale_factor,
+                                                            self.style.svg_config.scale_factor,
+                                                        ))
+                                                    } else {
+                                                        image
+                                                    }
+                                                }
+                                            };
+
+                                            let resized_image = image
+                                                .with_link(link_url.to_string())
+                                                .with_alignment(Alignment::Center);
+                                            doc.push(resized_image);
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to render SVG with link: {}", e);
+                                            let mut para =
+                                                genpdfi_extended::elements::Paragraph::default();
+                                            let style = genpdfi_extended::style::Style::new()
+                                                .with_font_size(self.style.text.size)
+                                                .italic();
+                                            para.push_styled(
+                                                format!("[SVG Image: {}]", alt),
+                                                style,
+                                            );
+                                            doc.push(para);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to decode SVG as UTF-8: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(format!("[SVG Image: {}]", alt), style);
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                        _ => {
+                            // For raster formats (JPEG, PNG, WebP, GIF), use from_reader
+                            match genpdfi_extended::elements::Image::from_reader(
+                                std::io::Cursor::new(image_data.bytes),
+                            ) {
+                                Ok(image) => {
+                                    let resized_image = image
+                                        .resizing_page_with(0.8)
+                                        .with_link(link_url.to_string())
+                                        .with_alignment(Alignment::Center);
+                                    doc.push(resized_image);
+                                }
+                                Err(e) => {
+                                    warn!("Failed to create image with link from data: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(format!("[Image: {}]", alt), style);
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to load image {}: {}", image_url, e);
                     let mut para = genpdfi_extended::elements::Paragraph::default();
                     let style = genpdfi_extended::style::Style::new()
                         .with_font_size(self.style.text.size)

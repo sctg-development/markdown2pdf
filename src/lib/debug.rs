@@ -156,6 +156,14 @@ impl Token {
                     url.replace("\"", "\\\""), indent)
             }
 
+            Token::ImageWithLink(alt_text, image_url, link_url) => {
+                format!("{}{{\n{}\"type\": \"ImageWithLink\",\n{}\"alt_text\": \"{}\",\n{}\"image_url\": \"{}\",\n{}\"link_url\": \"{}\"\n{}}}",
+                    indent, inner_indent, inner_indent,
+                    alt_text.replace("\"", "\\\""), inner_indent,
+                    image_url.replace("\"", "\\\""), inner_indent,
+                    link_url.replace("\"", "\\\""), indent)
+            }
+
             Token::Text(content) => {
                 format!(
                     "{}{{\n{}\"type\": \"Text\",\n{}\"content\": \"{}\"\n{}}}",
