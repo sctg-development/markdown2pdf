@@ -593,17 +593,19 @@ impl Lexer {
     /// Also detects if the link contains an image ([![alt](image)](url)) and returns ImageWithLink
     fn parse_link(&mut self) -> Result<Token, LexerError> {
         self.advance(); // skip '['
-        
+
         // Check if this is an image link: [![alt](image)](url)
         // We need to handle nested brackets properly
         if self.position < self.input.len() && self.current_char() == '!' {
             // This looks like ![...], could be an image link
             // Try to parse it as an image link
-            if let Ok(Token::ImageWithLink(alt, img_url, link_url)) = self.try_parse_image_with_link() {
+            if let Ok(Token::ImageWithLink(alt, img_url, link_url)) =
+                self.try_parse_image_with_link()
+            {
                 return Ok(Token::ImageWithLink(alt, img_url, link_url));
             }
         }
-        
+
         // Regular link parsing
         let text = self.read_until_char(']');
         self.advance(); // skip ']'
@@ -633,37 +635,37 @@ impl Lexer {
         if self.current_char() != '!' {
             return Err(LexerError::UnknownToken("not an image".to_string()));
         }
-        
+
         self.advance(); // skip '!'
-        
+
         // Check for '['
         if self.position >= self.input.len() || self.current_char() != '[' {
             return Err(LexerError::UnknownToken("no [ after !".to_string()));
         }
-        
+
         self.advance(); // skip '['
         let alt_text = self.read_until_char(']');
-        
+
         if self.position >= self.input.len() || self.current_char() != ']' {
             return Err(LexerError::UnknownToken("no ] after alt".to_string()));
         }
-        
+
         self.advance(); // skip ']'
-        
+
         // Now we should see (image_url)
         if self.position >= self.input.len() || self.current_char() != '(' {
             return Err(LexerError::UnknownToken("no ( after ]".to_string()));
         }
-        
+
         self.advance(); // skip '('
         let image_url_str = self.read_until_char(')');
-        
+
         if self.position >= self.input.len() || self.current_char() != ')' {
             return Err(LexerError::UnknownToken("no ) after image url".to_string()));
         }
-        
+
         self.advance(); // skip ')'
-        
+
         // Handle optional title in image URL
         let image_url = if let Some(space_pos) = image_url_str.find(' ') {
             image_url_str[..space_pos].trim().to_string()
@@ -672,27 +674,27 @@ impl Lexer {
         } else {
             image_url_str.trim().to_string()
         };
-        
+
         // Now we should see ](link_url)
         if self.position >= self.input.len() || self.current_char() != ']' {
             return Err(LexerError::UnknownToken("no ] after image".to_string()));
         }
-        
+
         self.advance(); // skip ']'
-        
+
         if self.position >= self.input.len() || self.current_char() != '(' {
             return Err(LexerError::UnknownToken("no ( after ]".to_string()));
         }
-        
+
         self.advance(); // skip '('
         let link_url_str = self.read_until_char(')');
-        
+
         if self.position >= self.input.len() || self.current_char() != ')' {
             return Err(LexerError::UnknownToken("no ) after link url".to_string()));
         }
-        
+
         self.advance(); // skip ')'
-        
+
         // Handle optional title in link URL
         let link_url = if let Some(space_pos) = link_url_str.find(' ') {
             link_url_str[..space_pos].trim().to_string()
@@ -701,7 +703,7 @@ impl Lexer {
         } else {
             link_url_str.trim().to_string()
         };
-        
+
         Ok(Token::ImageWithLink(alt_text, image_url, link_url))
     }
 

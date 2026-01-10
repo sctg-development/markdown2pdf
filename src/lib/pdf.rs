@@ -1035,9 +1035,7 @@ impl Pdf {
                                                 SvgWidth::Percentage(percent) => {
                                                     image.resizing_page_with(percent / 100.0)
                                                 }
-                                                SvgWidth::Pixels(_pixels) => {
-                                                    image
-                                                }
+                                                SvgWidth::Pixels(_pixels) => image,
                                                 SvgWidth::Auto => {
                                                     if self.style.svg_config.scale_factor != 1.0 {
                                                         image.with_scale(Scale::new(
