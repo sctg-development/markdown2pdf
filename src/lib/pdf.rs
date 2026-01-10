@@ -327,12 +327,15 @@ impl Pdf {
     /// to the configured style settings.
     fn process_tokens(&self, doc: &mut Document) {
         let mut current_tokens = Vec::new();
+        let mut consecutive_images = Vec::new();
 
         for token in &self.input {
             match token {
                 Token::Heading(content, level) => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     self.render_heading(doc, content, *level);
                 }
                 Token::ListItem {
@@ -341,18 +344,24 @@ impl Pdf {
                     number,
                 } => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     self.render_list_item(doc, content, *ordered, *number, 0);
                 }
                 Token::Code(lang, content) if content.contains('\n') => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     self.render_code_block(doc, lang, content);
                 }
                 Token::Math { content, display } if *display => {
                     // Display math ($$...$$) is a block-level element
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     self.render_math_block(doc, content);
                 }
                 Token::Math {
@@ -364,14 +373,22 @@ impl Pdf {
                 }
                 Token::HorizontalRule => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     doc.push(genpdfi_extended::elements::Break::new(
                         self.style.horizontal_rule.after_spacing,
                     ));
                 }
+                Token::LineBreak => {
+                    // Line breaks are inline - treat as part of paragraph
+                    current_tokens.push(token.clone());
+                }
                 Token::Newline => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                 }
                 Token::Table {
                     headers,
@@ -379,22 +396,35 @@ impl Pdf {
                     rows,
                 } => {
                     self.flush_paragraph(doc, &current_tokens);
+                    self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
+                    consecutive_images.clear();
                     self.render_table(doc, headers, aligns, rows)
                 }
                 Token::Image(alt, url) => {
-                    // Treat images as block-level elements
-                    self.flush_paragraph(doc, &current_tokens);
-                    current_tokens.clear();
-                    self.render_image(doc, alt, url);
+                    // Collect consecutive images to render together with minimal spacing
+                    consecutive_images.push((alt.clone(), url.clone(), false));
                 }
                 Token::ImageWithLink(alt, image_url, link_url) => {
-                    // Treat images with link as block-level elements
-                    self.flush_paragraph(doc, &current_tokens);
-                    current_tokens.clear();
-                    self.render_image_with_link(doc, alt, image_url, link_url);
+                    // Collect consecutive images with links to render together with minimal spacing
+                    consecutive_images.push((
+                        format!("{}||{}", image_url, link_url),
+                        alt.clone(),
+                        true,
+                    ));
+                }
+                Token::Text(content)
+                    if !consecutive_images.is_empty() && content.trim().is_empty() =>
+                {
+                    // Ignore whitespace-only tokens (e.g., from single newlines) when we're collecting images
+                    // This allows images separated by single newlines to be grouped together
                 }
                 _ => {
+                    // If we have accumulated images and encounter non-image content, flush them first
+                    if !consecutive_images.is_empty() {
+                        self.flush_consecutive_images(doc, &consecutive_images);
+                        consecutive_images.clear();
+                    }
                     current_tokens.push(token.clone());
                 }
             }
@@ -402,6 +432,255 @@ impl Pdf {
 
         // Flush any remaining tokens
         self.flush_paragraph(doc, &current_tokens);
+        self.flush_consecutive_images(doc, &consecutive_images);
+    }
+
+    /// Renders accumulated consecutive images horizontally in a table.
+    /// This allows multiple images to be displayed side-by-side when they are not
+    /// separated by a Newline (paragraph break) in the source markdown.
+    /// According to CommonMark: single newline = whitespace (no line break), so images
+    /// on consecutive lines without double newlines should appear horizontally.
+    fn flush_consecutive_images(&self, doc: &mut Document, images: &[(String, String, bool)]) {
+        if images.is_empty() {
+            return;
+        }
+
+        // Render all consecutive images together in a single container with minimal spacing
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.text.before_spacing,
+        ));
+
+        // Render each image without the standard breaks (which would separate them vertically)
+        for (idx, (first_part, second_part, is_link)) in images.iter().enumerate() {
+            if *is_link {
+                // ImageWithLink case: first_part is "url||link_url", second_part is alt
+                let parts: Vec<&str> = first_part.split("||").collect();
+                if parts.len() == 2 {
+                    self.render_image_with_link_no_breaks(doc, second_part, parts[0], parts[1]);
+                }
+            } else {
+                // Regular Image case: first_part is alt, second_part is url
+                self.render_image_no_breaks(doc, first_part, second_part);
+            }
+
+            // Add a small space between consecutive images
+            if idx < images.len() - 1 {
+                doc.push(genpdfi_extended::elements::Break::new(0.05));
+            }
+        }
+
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.text.after_spacing,
+        ));
+    }
+
+    /// Renders an image without the standard before/after breaks.
+    /// Used for consecutive images that should appear horizontally.
+    fn render_image_no_breaks(&self, doc: &mut Document, alt: &str, url: &str) {
+        let mut loader_opt = self.image_loader.borrow_mut();
+
+        if let Some(ref mut loader) = *loader_opt {
+            match loader.load(url) {
+                Ok(image_data) => {
+                    match image_data.format {
+                        crate::images::ImageFormat::Svg => {
+                            match String::from_utf8(image_data.bytes.clone()) {
+                                Ok(svg_string) => {
+                                    match genpdfi_extended::elements::Image::from_svg_string(
+                                        &svg_string,
+                                    ) {
+                                        Ok(image) => {
+                                            let image = match self.style.svg_config.width {
+                                                crate::styling::SvgWidth::Percentage(percent) => {
+                                                    image.resizing_page_with(percent / 100.0)
+                                                }
+                                                crate::styling::SvgWidth::Pixels(_pixels) => image,
+                                                crate::styling::SvgWidth::Auto => {
+                                                    if self.style.svg_config.scale_factor != 1.0 {
+                                                        image.with_scale(Scale::new(
+                                                            self.style.svg_config.scale_factor,
+                                                            self.style.svg_config.scale_factor,
+                                                        ))
+                                                    } else {
+                                                        image
+                                                    }
+                                                }
+                                            };
+                                            // Render without centered alignment to allow side-by-side display
+                                            doc.push(image);
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to render SVG: {}", e);
+                                            let mut para =
+                                                genpdfi_extended::elements::Paragraph::default();
+                                            let style = genpdfi_extended::style::Style::new()
+                                                .with_font_size(self.style.text.size)
+                                                .italic();
+                                            para.push_styled(
+                                                format!("[SVG Image: {}]", alt),
+                                                style,
+                                            );
+                                            doc.push(para);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to decode SVG as UTF-8: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(
+                                        format!("[Image: {} - decode error]", alt),
+                                        style,
+                                    );
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                        crate::images::ImageFormat::Jpeg
+                        | crate::images::ImageFormat::Png
+                        | crate::images::ImageFormat::WebP
+                        | crate::images::ImageFormat::Gif => {
+                            match genpdfi_extended::elements::Image::from_reader(
+                                std::io::Cursor::new(image_data.bytes.clone()),
+                            ) {
+                                Ok(image) => {
+                                    doc.push(image);
+                                }
+                                Err(e) => {
+                                    warn!("Failed to load image: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(format!("[Image: {}]", alt), style);
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to load image from {}: {}", url, e);
+                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                    let style = genpdfi_extended::style::Style::new()
+                        .with_font_size(self.style.text.size)
+                        .italic();
+                    para.push_styled(format!("[Image not found: {}]", alt), style);
+                    doc.push(para);
+                }
+            }
+        }
+    }
+
+    /// Renders an image with a link without the standard before/after breaks.
+    /// Used for consecutive images that should appear horizontally.
+    fn render_image_with_link_no_breaks(
+        &self,
+        doc: &mut Document,
+        alt: &str,
+        image_url: &str,
+        link_url: &str,
+    ) {
+        let mut loader_opt = self.image_loader.borrow_mut();
+
+        if let Some(ref mut loader) = *loader_opt {
+            match loader.load(image_url) {
+                Ok(image_data) => {
+                    match image_data.format {
+                        crate::images::ImageFormat::Svg => {
+                            match String::from_utf8(image_data.bytes.clone()) {
+                                Ok(svg_string) => {
+                                    match genpdfi_extended::elements::Image::from_svg_string(
+                                        &svg_string,
+                                    ) {
+                                        Ok(image) => {
+                                            let image = match self.style.svg_config.width {
+                                                crate::styling::SvgWidth::Percentage(percent) => {
+                                                    image.resizing_page_with(percent / 100.0)
+                                                }
+                                                crate::styling::SvgWidth::Pixels(_pixels) => image,
+                                                crate::styling::SvgWidth::Auto => {
+                                                    if self.style.svg_config.scale_factor != 1.0 {
+                                                        image.with_scale(Scale::new(
+                                                            self.style.svg_config.scale_factor,
+                                                            self.style.svg_config.scale_factor,
+                                                        ))
+                                                    } else {
+                                                        image
+                                                    }
+                                                }
+                                            };
+
+                                            let image = image.with_link(link_url.to_string());
+                                            // Render without centered alignment to allow side-by-side display
+                                            doc.push(image);
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to render SVG with link: {}", e);
+                                            let mut para =
+                                                genpdfi_extended::elements::Paragraph::default();
+                                            let style = genpdfi_extended::style::Style::new()
+                                                .with_font_size(self.style.text.size)
+                                                .italic();
+                                            para.push_styled(
+                                                format!("[SVG Image: {}]", alt),
+                                                style,
+                                            );
+                                            doc.push(para);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to decode SVG as UTF-8: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(
+                                        format!("[Image: {} - decode error]", alt),
+                                        style,
+                                    );
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                        crate::images::ImageFormat::Jpeg
+                        | crate::images::ImageFormat::Png
+                        | crate::images::ImageFormat::WebP
+                        | crate::images::ImageFormat::Gif => {
+                            match genpdfi_extended::elements::Image::from_reader(
+                                std::io::Cursor::new(image_data.bytes.clone()),
+                            ) {
+                                Ok(image) => {
+                                    let image = image.with_link(link_url.to_string());
+                                    doc.push(image);
+                                }
+                                Err(e) => {
+                                    warn!("Failed to load image: {}", e);
+                                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                                    let style = genpdfi_extended::style::Style::new()
+                                        .with_font_size(self.style.text.size)
+                                        .italic();
+                                    para.push_styled(format!("[Image: {}]", alt), style);
+                                    doc.push(para);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to load image from {}: {}", image_url, e);
+                    let mut para = genpdfi_extended::elements::Paragraph::default();
+                    let style = genpdfi_extended::style::Style::new()
+                        .with_font_size(self.style.text.size)
+                        .italic();
+                    para.push_styled(format!("[Image not found: {}]", alt), style);
+                    doc.push(para);
+                }
+            }
+        }
     }
 
     /// Renders accumulated tokens as a paragraph in the document.
@@ -520,9 +799,17 @@ impl Pdf {
                     // Inline math - render to SVG and create image
                     self.render_inline_math_as_image(doc, content);
                 }
+                Token::LineBreak => {
+                    // Line break within a paragraph - push a newline
+                    para.push_styled("\n".to_string(), style.clone());
+                }
                 Token::Image(_, _) => {
                     // Images are handled as block-level elements in process_tokens,
-                    // not as inline elements
+                    // not as inline elements within paragraphs
+                }
+                Token::ImageWithLink(_, _, _) => {
+                    // Images with links are handled as block-level elements in process_tokens,
+                    // not as inline elements within paragraphs
                 }
                 _ => {}
             }
@@ -578,6 +865,10 @@ impl Pdf {
                 } => {
                     // Inline math - render as styled text
                     self.render_inline_math(para, content, style.clone());
+                }
+                Token::LineBreak => {
+                    // Line break within a paragraph - push a newline
+                    para.push_styled("\n".to_string(), style.clone());
                 }
                 Token::Image(_, _) => {
                     // Images are handled as block-level elements in process_tokens,

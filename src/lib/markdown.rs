@@ -96,7 +96,9 @@ pub enum Token {
         content: String,
         display: bool, // true for $$...$$, false for $...$
     },
-    /// Line break
+    /// Line break (2+ spaces followed by newline, or \ at end of line)
+    LineBreak,
+    /// Newline (paragraph separator)
     Newline,
     /// Horizontal rule (---)
     HorizontalRule,
@@ -162,7 +164,7 @@ impl Token {
             Token::ImageWithLink(alt, _, _) => result.push_str(alt),
             Token::HtmlComment(comment) => result.push_str(comment),
             Token::Unknown(text) => result.push_str(text),
-            Token::Newline | Token::HorizontalRule => {
+            Token::LineBreak | Token::Newline | Token::HorizontalRule => {
                 // These don't contain text
             }
             Token::Table {
@@ -742,9 +744,57 @@ impl Lexer {
     }
 
     /// Parses a newline token
+    /// Parses a newline token or line break.
+    /// - LineBreak (2+ spaces before newline): explicit line break within paragraph
+    /// - Newline (double newline / empty line): paragraph separator
+    /// - No token returned for single newline: treated as whitespace
     fn parse_newline(&mut self) -> Result<Token, LexerError> {
+        // Check if we have trailing spaces before this newline (line break)
+        let mut space_count = 0;
+        let mut check_pos = if self.position > 0 {
+            self.position - 1
+        } else {
+            0
+        };
+
+        // Count trailing spaces before newline
+        while check_pos > 0 && self.input[check_pos] == ' ' {
+            space_count += 1;
+            check_pos = check_pos.saturating_sub(1);
+        }
+
+        // Check if we have 2+ trailing spaces - this is a line break
+        let is_line_break = space_count >= 2;
+
+        // Skip the first newline
         self.advance();
-        Ok(Token::Newline)
+
+        // Check for additional newlines (empty lines = paragraph break)
+        let mut newline_count = 1;
+        while self.position < self.input.len() && self.current_char() == '\n' {
+            newline_count += 1;
+            self.advance();
+        }
+
+        // Skip whitespace-only lines
+        while self.position < self.input.len()
+            && (self.current_char() == ' ' || self.current_char() == '\t')
+        {
+            self.advance();
+        }
+
+        if is_line_break {
+            Ok(Token::LineBreak)
+        } else if newline_count >= 2 {
+            // Double newline = paragraph break
+            Ok(Token::Newline)
+        } else {
+            // Single newline = treat as whitespace, don't create token
+            // The previous text token and next text token will be joined by space
+            // Actually, we need to return something to continue parsing
+            // Return a Text token with a space to maintain word separation
+            Ok(Token::Text(" ".to_string()))
+        }
     }
 
     /// Parses regular text until a special token start or newline is encountered.

@@ -275,6 +275,13 @@ impl Token {
                 )
             }
 
+            Token::LineBreak => {
+                format!(
+                    "{}{{\n{}\"type\": \"LineBreak\"\n{}}}",
+                    indent, inner_indent, indent
+                )
+            }
+
             Token::Newline => {
                 format!(
                     "{}{{\n{}\"type\": \"Newline\"\n{}}}",
