@@ -1,5 +1,5 @@
 [workspace]
-members = ["genpdfi_extended", "microtex_rs"]
+members = []
 
 [package]
 name = "markdown2pdf"
@@ -27,21 +27,27 @@ name = "markdown2pdf"
 path = "src/bin/main.rs"
 
 [features]
-default = ["fetch", "rustls-tls"]
+default = ["fetch", "rustls-tls", "latex"]
 fetch = ["dep:reqwest"]
 rustls-tls = ["fetch", "reqwest/rustls"]
 native-tls = ["fetch", "reqwest/native-tls"]
+
+# Optional feature to enable LaTeX rendering via genpdfi_extended
+# When enabled, this crate will use genpdfi_extended's `latex` feature.
+latex = ["genpdfi_extended/latex"]
 
 [dependencies]
 #genpdfi_extended = { path = "./genpdfi_extended", features = ["images"] }
 genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended.git", package = "genpdfi_extended", features = [
     "images",
+    "latex",
 ] } # printpdf 0.8.2
 printpdf = "0.8.2"
-microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", features = [
-    # "vendored-cairo",
-    # "vendored-pango",
-] }
+# microtex_rs removed: LaTeX rendering delegated to genpdfi_extended when feature "latex" is enabled
+# microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", features = [
+#    # "vendored-cairo",
+#    # "vendored-pango",
+#] }
 # microtex_rs = { path = "./microtex_rs", features = [] }
 dirs = "6.0.0"
 toml = "0.9.8"

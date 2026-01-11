@@ -770,12 +770,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-
-[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1131,13 +1125,15 @@ dependencies = [
 
 [[package]]
 name = "genpdfi_extended"
-version = "0.3.4"
-source = "git+https://github.com/sctg-development/genpdfi-extended.git#4ed399719294d7c1688071e8eacd337dd9c055fc"
+version = "0.4.0"
+source = "git+https://github.com/sctg-development/genpdfi-extended.git#8042470ce04bac9a5ad378d561a1787e25d32ea7"
 dependencies = [
  "clap",
  "derive_more 2.1.1",
+ "flate2",
  "image",
  "lopdf 0.38.0",
+ "microtex_rs",
  "printpdf",
  "rusttype",
  "subsetter",
@@ -1914,7 +1910,6 @@ dependencies = [
  "lazy_static",
  "log",
  "lopdf 0.38.0",
- "microtex_rs 0.1.0 (git+https://github.com/sctg-development/microtex_rs.git)",
  "once_cell",
  "predicates",
  "printpdf",
@@ -1974,6 +1969,7 @@ dependencies = [
 [[package]]
 name = "microtex_rs"
 version = "0.1.0"
+source = "git+https://github.com/sctg-development/microtex_rs?branch=main#be59aac13189cfd7618ec7d957e0b7202d9890b2"
 dependencies = [
  "bindgen",
  "byteorder",
@@ -1982,25 +1978,7 @@ dependencies = [
  "env_logger",
  "log",
  "num_cpus",
- "pretty_assertions",
- "reqwest",
- "sha2",
- "thiserror 2.0.17",
- "walkdir",
-]
-
-[[package]]
-name = "microtex_rs"
-version = "0.1.0"
-source = "git+https://github.com/sctg-development/microtex_rs.git#21a93f0877a22a743891fa4c3a6b8c160b15fc4c"
-dependencies = [
- "bindgen",
- "byteorder",
- "clap",
- "cmake",
- "env_logger",
- "log",
- "num_cpus",
+ "quick-xml",
  "reqwest",
  "serde",
  "serde_json",
@@ -2558,16 +2536,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty_assertions"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
-dependencies = [
- "diff",
- "yansi",
-]
-
-[[package]]
 name = "prettyplease"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2665,6 +2633,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
 dependencies = [
  "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -4672,12 +4641,6 @@ checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
 ]
-
-[[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoke"

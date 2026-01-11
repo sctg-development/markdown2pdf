@@ -53,42 +53,8 @@ static MICRO_TEX: OnceCell<Mutex<MicroTex>> = OnceCell::new();
 ///
 /// Note: Full LaTeX rendering examples are marked with `ignore` due to underlying
 /// C++ dependencies that may cause crashes in test environments.
-pub fn latex_to_svg(latex_content: &str, display: bool) -> Result<String, String> {
-    // Trim whitespace
-    let latex = latex_content.trim();
-
-    // Validate that content is not empty
-    if latex.is_empty() {
-        return Err("LaTeX content is empty".to_string());
-    }
-
-    // Wrap LaTeX in appropriate delimiters
-    // MicroTeX expects display math in \[...\] format and inline in $...$ format
-    let latex_with_delimiters = if display {
-        format!("\\[{}\\]", latex)
-    } else {
-        // Use single-dollar inline math
-        format!("${}$", latex)
-    };
-
-    // Initialize render configuration with defaults
-    let config = RenderConfig::default();
-
-    // Initialize or get the global MicroTeX renderer (singleton) and lock it.
-    let renderer_mutex = MICRO_TEX.get_or_try_init(|| {
-        MicroTex::new()
-            .map(Mutex::new)
-            .map_err(|e| format!("Failed to initialize MicroTeX: {}", e))
-    })?;
-
-    let renderer = renderer_mutex
-        .lock()
-        .map_err(|e| format!("Failed to lock MicroTeX renderer: {}", e))?;
-
-    // Render LaTeX to SVG using the shared renderer
-    renderer
-        .render(&latex_with_delimiters, &config)
-        .map_err(|e| format!("Failed to render LaTeX: {}", e))
+pub fn latex_to_svg(_latex_content: &str, _display: bool) -> Result<String, String> {
+    Err("need LaTeX feature".to_string())
 }
 
 /// Converts a LaTeX mathematical expression to SVG with dimensional metrics.
@@ -118,58 +84,11 @@ pub fn latex_to_svg(latex_content: &str, display: bool) -> Result<String, String
 /// assert!(result.is_ok());
 /// ```
 pub fn latex_to_svg_with_metrics(
-    latex_content: &str,
-    display: bool,
-    target_height: f32,
+    _latex_content: &str,
+    _display: bool,
+    _target_height: f32,
 ) -> Result<(String, f32), String> {
-    // Trim whitespace
-    let latex = latex_content.trim();
-
-    // Validate that content is not empty
-    if latex.is_empty() {
-        return Err("LaTeX content is empty".to_string());
-    }
-
-    // Validate target height
-    if target_height <= 0.0 {
-        return Err("Target height must be positive".to_string());
-    }
-
-    // Wrap LaTeX in appropriate delimiters
-    let latex_with_delimiters = if display {
-        format!("\\[{}\\]", latex)
-    } else {
-        format!("${}$", latex)
-    };
-
-    let config = RenderConfig::default();
-
-    let renderer_mutex = MICRO_TEX.get_or_try_init(|| {
-        MicroTex::new()
-            .map(Mutex::new)
-            .map_err(|e| format!("Failed to initialize MicroTeX: {}", e))
-    })?;
-
-    let renderer = renderer_mutex
-        .lock()
-        .map_err(|e| format!("Failed to lock MicroTeX renderer: {}", e))?;
-
-    // Render LaTeX to SVG with metrics
-    let result: RenderResult = renderer
-        .render_to_svg_with_metrics(&latex_with_delimiters, &config)
-        .map_err(|e| format!("Failed to render LaTeX with metrics: {}", e))?;
-
-    // Calculate scale factor using intelligent analysis of formula metrics
-    // This ensures consistent sizing of formulas with similar structural complexity
-    // When key character metrics are available, use them for more accurate scaling
-    let scale_factor = calculate_scale_factor(
-        &result.metrics,
-        result.key_char_metrics.as_ref(),
-        target_height,
-        display,
-    );
-
-    Ok((result.svg, scale_factor))
+    Err("need LaTeX feature".to_string())
 }
 
 /// Calculates an intelligent scale factor for a formula based on its metrics and target height.

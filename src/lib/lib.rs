@@ -111,7 +111,7 @@ pub mod embedded_fonts;
 pub mod fonts;
 pub mod highlighting;
 pub mod images;
-pub mod latex;
+
 pub mod markdown;
 pub mod pdf;
 pub mod styling;

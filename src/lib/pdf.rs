@@ -1424,78 +1424,47 @@ impl Pdf {
     /// as centered images in the PDF. Display math is rendered as a block-level
     /// element with appropriate spacing. The rendering uses dimensional metrics to
     /// ensure consistent sizing with the surrounding text.
+    #[cfg(feature = "latex")]
     fn render_math_block(&self, doc: &mut Document, latex_content: &str) {
-        doc.push(genpdfi_extended::elements::Break::new(0.5));
+        // Use genpdfi_extended's native Latex element when the feature is enabled.
+        // Size in points is derived from the configured text size (slightly larger for display math).
+        let size_pt = (self.style.text.size as f32) * 1.2;
+        let mut latex_elem = genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
+        // center display math
+        let latex_elem = latex_elem.with_alignment(Alignment::Center);
+        doc.push(latex_elem);
+    }
 
-        // Try to render LaTeX to SVG with metrics for proper scaling
-        // Use the paragraph text size as the target height for the formula
-        let target_height = (self.style.text.size as f32) * 1.2; // Slightly taller for display mode
-        match self.safe_latex_to_svg_with_metrics(latex_content, true, target_height) {
-            Ok((svg_string, scale_factor)) => {
-                match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
-                    Ok(image) => {
-                        // Apply scaling based on metrics to achieve consistent sizing
-                        let resized_image = image
-                            .resizing_page_with(0.8 * scale_factor)
-                            .with_alignment(Alignment::Center);
-                        doc.push(resized_image);
-                    }
-                    Err(e) => {
-                        warn!("Failed to create image from LaTeX SVG: {}", e);
-                        let mut para = genpdfi_extended::elements::Paragraph::default();
-                        let style = genpdfi_extended::style::Style::new()
-                            .with_font_size(self.style.text.size)
-                            .italic();
-                        para.push_styled(format!("[LaTeX: {}]", latex_content), style);
-                        doc.push(para);
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("Failed to render LaTeX with metrics: {}", e);
-                let mut para = genpdfi_extended::elements::Paragraph::default();
-                let style = genpdfi_extended::style::Style::new()
-                    .with_font_size(self.style.text.size)
-                    .italic();
-                para.push_styled(format!("[LaTeX error: {}]", latex_content), style);
-                doc.push(para);
-            }
-        }
-
-        doc.push(genpdfi_extended::elements::Break::new(0.5));
+    #[cfg(not(feature = "latex"))]
+    fn render_math_block(&self, doc: &mut Document, _latex_content: &str) {
+        // Feature disabled: show an informative message instead of rendering
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+        let style = genpdfi_extended::style::Style::new()
+            .with_font_size(self.style.text.size)
+            .italic();
+        para.push_styled("need LaTeX feature".to_string(), style);
+        doc.push(para);
     }
 
     /// Safely render LaTeX to SVG with error recovery.
     ///
     /// This wraps the LaTeX rendering call with error handling to prevent
     /// panics from underlying C++ dependencies.
-    #[allow(dead_code)]
-    fn safe_latex_to_svg(&self, content: &str, display: bool) -> Result<String, String> {
-        // Use catch_unwind to protect against panics in C++ code
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::latex::latex_to_svg(content, display)
-        }))
-        .unwrap_or_else(|_| Err("LaTeX rendering caused an internal error".to_string()))
+    /// Legacy stub: LaTeX rendering is now provided by the `genpdfi_extended` crate
+    /// when the "latex" feature is enabled. These functions remain as safe stubs
+    /// to avoid panics in older code paths and return a clear error when used.
+    fn safe_latex_to_svg(&self, _content: &str, _display: bool) -> Result<String, String> {
+        Err("need LaTeX feature".to_string())
     }
 
-    /// Safely render LaTeX to SVG with metrics and error recovery.
-    ///
-    /// This wraps the LaTeX rendering call with metrics calculation with error handling
-    /// to prevent panics from underlying C++ dependencies. Returns both the SVG string
-    /// and a scale factor computed from the formula's dimensional metrics.
+    /// Legacy stub for compatibility. Returns an error when called.
     fn safe_latex_to_svg_with_metrics(
         &self,
-        content: &str,
-        display: bool,
-        target_height: f32,
+        _content: &str,
+        _display: bool,
+        _target_height: f32,
     ) -> Result<(String, f32), String> {
-        // Use catch_unwind to protect against panics in C++ code
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::latex::latex_to_svg_with_metrics(content, display, target_height)
-        }))
-        .unwrap_or_else(|_| {
-            Err("LaTeX rendering with metrics caused an internal error".to_string())
-        })
+        Err("need LaTeX feature".to_string())
     }
 
     /// Renders inline math ($...$).
@@ -1503,40 +1472,23 @@ impl Pdf {
     /// This method converts inline LaTeX expressions to SVG and embeds them
     /// as inline images in the paragraph. The rendering uses dimensional metrics
     /// to ensure consistent sizing with the surrounding text.
+    #[cfg(feature = "latex")]
     fn render_inline_math_as_image(&self, doc: &mut Document, latex_content: &str) {
-        // Render inline math as a small SVG image
-        let target_height = (self.style.text.size as f32) * 0.9; // Slightly smaller than text
-        match self.safe_latex_to_svg_with_metrics(latex_content, false, target_height) {
-            Ok((svg_string, scale_factor)) => {
-                match genpdfi_extended::elements::Image::from_svg_string(&svg_string) {
-                    Ok(image) => {
-                        // Apply scaling and center alignment
-                        let resized_image = image
-                            .resizing_page_with(0.25 * scale_factor) // Smaller for inline
-                            .with_alignment(Alignment::Center);
-                        doc.push(resized_image);
-                    }
-                    Err(e) => {
-                        warn!("Failed to create image from inline LaTeX SVG: {}", e);
-                        let mut para = genpdfi_extended::elements::Paragraph::default();
-                        let style = genpdfi_extended::style::Style::new()
-                            .with_font_size(self.style.text.size)
-                            .italic();
-                        para.push_styled(format!("[equation]"), style);
-                        doc.push(para);
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("Failed to render inline LaTeX: {}", e);
-                let mut para = genpdfi_extended::elements::Paragraph::default();
-                let style = genpdfi_extended::style::Style::new()
-                    .with_font_size(self.style.text.size)
-                    .italic();
-                para.push_styled(format!("[equation]"), style);
-                doc.push(para);
-            }
-        }
+        // Use genpdfi_extended's Latex element in inline mode and size it slightly smaller
+        let size_pt = (self.style.text.size as f32) * 0.9;
+        let latex_elem = genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
+        doc.push(latex_elem);
+    }
+
+    #[cfg(not(feature = "latex"))]
+    fn render_inline_math_as_image(&self, doc: &mut Document, _latex_content: &str) {
+        // Feature disabled: show a small placeholder
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+        let style = genpdfi_extended::style::Style::new()
+            .with_font_size(self.style.text.size)
+            .italic();
+        para.push_styled("need LaTeX feature".to_string(), style);
+        doc.push(para);
     }
 
     fn render_inline_math(
