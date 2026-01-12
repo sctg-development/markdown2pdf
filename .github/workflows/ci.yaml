@@ -58,8 +58,12 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
-      - name: Run tests (default features)
-        run: cargo test --verbose
+      # - name: Run tests (default features)
+      #   run: cargo test --verbose
+
+      - name: clean beforre running coverage
+        run: |
+          rm -rf target
 
       - name: Generate coverage (Tarpaulin)
         run: cargo tarpaulin --out Xml --output-dir coverage
