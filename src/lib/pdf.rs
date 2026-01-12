@@ -1438,9 +1438,8 @@ impl Pdf {
 
         // Use genpdfi_extended's native Latex element when the feature is enabled.
         // Size in points is taken from the latex style.
-        let size_pt = (self.style.latex.size as f32);
-        let mut latex_elem =
-            genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
+        let size_pt = self.style.latex.size as f32;
+        let latex_elem = genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
 
         // Apply configured alignment
         let align = match self.style.latex.alignment {
@@ -1472,27 +1471,6 @@ impl Pdf {
         doc.push(para);
     }
 
-    /// Safely render LaTeX to SVG with error recovery.
-    ///
-    /// This wraps the LaTeX rendering call with error handling to prevent
-    /// panics from underlying C++ dependencies.
-    /// Legacy stub: LaTeX rendering is now provided by the `genpdfi_extended` crate
-    /// when the "latex" feature is enabled. These functions remain as safe stubs
-    /// to avoid panics in older code paths and return a clear error when used.
-    fn safe_latex_to_svg(&self, _content: &str, _display: bool) -> Result<String, String> {
-        Err("need LaTeX feature".to_string())
-    }
-
-    /// Legacy stub for compatibility. Returns an error when called.
-    fn safe_latex_to_svg_with_metrics(
-        &self,
-        _content: &str,
-        _display: bool,
-        _target_height: f32,
-    ) -> Result<(String, f32), String> {
-        Err("need LaTeX feature".to_string())
-    }
-
     /// Renders inline math ($...$).
     ///
     /// This method converts inline LaTeX expressions to SVG and embeds them
@@ -1522,15 +1500,26 @@ impl Pdf {
     #[cfg(feature = "mermaid")]
     fn render_mermaid(&self, doc: &mut Document, content: &str) {
         // Add spacing before the mermaid block
-        doc.push(genpdfi_extended::elements::Break::new(self.style.code.before_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.code.before_spacing,
+        ));
 
         // Use genpdfi_extended's Mermaid element (may use headless_chrome internally)
         let mer = genpdfi_extended::elements::Mermaid::new(content.to_string());
-        let mer = mer.with_alignment(Alignment::Center);
+        let auto_scale = self.style.mermaid.auto_scale;
+        let mut max_ratio = self.style.mermaid.max_ratio;
+        if max_ratio > 1.0 {
+            max_ratio = 1.0;
+        }
+        let mer = mer
+            .with_alignment(Alignment::Center)
+            .with_auto_scale(auto_scale, max_ratio);
         doc.push(mer);
 
         // Add spacing after the mermaid block
-        doc.push(genpdfi_extended::elements::Break::new(self.style.code.after_spacing));
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.code.after_spacing,
+        ));
     }
 
     #[cfg(not(feature = "mermaid"))]
@@ -1539,7 +1528,9 @@ impl Pdf {
         let mut para = genpdfi_extended::elements::Paragraph::default();
         let mut style = genpdfi_extended::style::Style::new().with_font_size(self.style.code.size);
         if let Some(color) = self.style.code.text_color {
-            style = style.with_color(genpdfi_extended::style::Color::Rgb(color.0, color.1, color.2));
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(
+                color.0, color.1, color.2,
+            ));
         }
         para.push_styled("need Mermaid feature".to_string(), style);
         doc.push(para);
@@ -1620,6 +1611,40 @@ mod tests {
         let pdf = create_test_pdf(tokens);
         let doc = pdf.render_into_document();
         // We don't assert anything about content; the purpose is to ensure rendering doesn't panic
+        assert!(Pdf::render(doc, "/dev/null").is_none());
+    }
+
+    #[cfg(feature = "mermaid")]
+    #[test]
+    #[ignore]
+    fn test_mermaid_rendering_with_custom_config_ignored() {
+        // Ensure custom mermaid config values don't panic during rendering
+        let tokens = vec![Token::Code(
+            "mermaid".to_string(),
+            "graph LR\nA-->B".to_string(),
+        )];
+
+        let mut pdf = create_test_pdf(tokens);
+        pdf.style.mermaid.auto_scale = 3.5;
+        pdf.style.mermaid.max_ratio = 0.8;
+        let doc = pdf.render_into_document();
+        assert!(Pdf::render(doc, "/dev/null").is_none());
+    }
+
+    #[cfg(feature = "mermaid")]
+    #[test]
+    #[ignore]
+    fn test_mermaid_rendering_with_max_ratio_clamped_ignored() {
+        // If max_ratio is > 1 it should be clamped and not cause errors
+        let tokens = vec![Token::Code(
+            "mermaid".to_string(),
+            "graph LR\nA-->B".to_string(),
+        )];
+
+        let mut pdf = create_test_pdf(tokens);
+        pdf.style.mermaid.auto_scale = 2.0;
+        pdf.style.mermaid.max_ratio = 2.0; // will be clamped by render_mermaid
+        let doc = pdf.render_into_document();
         assert!(Pdf::render(doc, "/dev/null").is_none());
     }
 

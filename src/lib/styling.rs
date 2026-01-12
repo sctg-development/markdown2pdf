@@ -161,6 +161,24 @@ impl Default for SvgImageConfig {
     }
 }
 
+/// Configuration for Mermaid rendering used by the Mermaid element.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MermaidConfig {
+    /// Auto scale factor (1.0 = original size). Accepts integer or float from TOML.
+    pub auto_scale: f32,
+    /// Maximum allowed ratio (must be <= 1.0)
+    pub max_ratio: f32,
+}
+
+impl Default for MermaidConfig {
+    fn default() -> Self {
+        Self {
+            auto_scale: 2.0,
+            max_ratio: 1.0,
+        }
+    }
+}
+
 /// Main style configuration for mapping markdown elements to PDF styles.
 ///
 /// This struct contains style definitions for each markdown element type
@@ -199,6 +217,8 @@ pub struct StyleMatch {
     pub table_cell: BasicTextStyle,
     /// Configuration for SVG image rendering
     pub svg_config: SvgImageConfig,
+    /// Mermaid rendering configuration
+    pub mermaid: MermaidConfig,
 
     // TODO: Not parsed into a actual horizontal rule currently, we need a proper styling for this
     /// Style for horizontal rules (---)
@@ -417,6 +437,23 @@ impl Default for StyleMatch {
                 None,
             ),
             svg_config: SvgImageConfig::default(),
+            mermaid: MermaidConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mermaid_default() {
+        let m = MermaidConfig::default();
+        assert_eq!(m.auto_scale, 2.0);
+        assert_eq!(m.max_ratio, 1.0);
+
+        let s = StyleMatch::default();
+        assert_eq!(s.mermaid.auto_scale, 2.0);
+        assert_eq!(s.mermaid.max_ratio, 1.0);
     }
 }

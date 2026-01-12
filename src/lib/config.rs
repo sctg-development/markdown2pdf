@@ -83,7 +83,7 @@
 //! A complete example configuration file can be found in markdown2pdfrc.example.toml which
 //! demonstrates all available styling options.
 
-use crate::styling::{BasicTextStyle, Margins, StyleMatch, TextAlignment, SvgImageConfig, SvgWidth, SvgHeight};
+use crate::styling::{BasicTextStyle, Margins, StyleMatch, TextAlignment, SvgImageConfig, SvgWidth, SvgHeight, MermaidConfig};
 use std::fs;
 use std::path::Path;
 use toml::Value;
@@ -256,6 +256,35 @@ fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageC
     config
 }
 
+/// Parses the [mermaid] configuration section.
+///
+/// - `auto_scale`: float (or int) used by Mermaid renderer for scaling
+/// - `max_ratio`: float in range (0..=1.0] specifying maximum ratio (clamped to 1.0)
+fn parse_mermaid_config(value: Option<&Value>, default: MermaidConfig) -> MermaidConfig {
+    let mut config = default;
+    if let Some(m) = value {
+        if let Some(auto_val) = m.get("auto_scale") {
+            if let Some(f) = auto_val.as_float() {
+                config.auto_scale = f as f32;
+            } else if let Some(i) = auto_val.as_integer() {
+                config.auto_scale = i as f32;
+            }
+        }
+        if let Some(max_val) = m.get("max_ratio") {
+            let v = if let Some(f) = max_val.as_float() {
+                f as f32
+            } else if let Some(i) = max_val.as_integer() {
+                i as f32
+            } else {
+                config.max_ratio
+            };
+            // clamp to <= 1.0
+            config.max_ratio = if v > 1.0 { 1.0 } else { v };
+        }
+    }
+    config
+}
+
 /// Parses a TOML configuration string and returns a complete StyleMatch.
 ///
 /// This function handles the core TOML parsing logic and can be used with both
@@ -363,6 +392,7 @@ pub fn parse_config_string(config_str: &str) -> StyleMatch {
             config.get("image").and_then(|i| i.get("svg")),
             default_style.svg_config,
         ),
+        mermaid: parse_mermaid_config(config.get("mermaid"), default_style.mermaid),
     }
 }
 
@@ -631,6 +661,41 @@ mod tests {
 
         assert_eq!(style.text.size, 12);
         assert_eq!(style.text.alignment, Some(TextAlignment::Justify));
+    }
+
+    #[test]
+    fn test_parse_mermaid_config() {
+        // Defaults come from StyleMatch::default
+        let default_style = StyleMatch::default();
+        assert_eq!(default_style.mermaid.auto_scale, 2.0);
+        assert_eq!(default_style.mermaid.max_ratio, 1.0);
+
+        let cfg = r#"
+            [mermaid]
+            auto_scale = 3
+            max_ratio = 0.8
+        "#;
+        let style = parse_config_string(cfg);
+        assert_eq!(style.mermaid.auto_scale, 3.0);
+        assert_eq!(style.mermaid.max_ratio, 0.8);
+
+        // auto_scale can also be a float
+        let cfg_float = r#"
+            [mermaid]
+            auto_scale = 2.5
+            max_ratio = 0.75
+        "#;
+        let style_float = parse_config_string(cfg_float);
+        assert!((style_float.mermaid.auto_scale - 2.5).abs() < 1e-6);
+        assert_eq!(style_float.mermaid.max_ratio, 0.75);
+
+        // max_ratio should be clamped to 1.0
+        let cfg2 = r#"
+            [mermaid]
+            max_ratio = 2.0
+        "#;
+        let style2 = parse_config_string(cfg2);
+        assert_eq!(style2.mermaid.max_ratio, 1.0);
     }
 
     #[test]

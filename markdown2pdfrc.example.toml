@@ -205,6 +205,13 @@ backgroundcolor = { r = 255, g = 255, b = 255 }
 #   - width = "50%"       → SVG rendered at 50% of page width (scale_factor ignored)
 #   - width = "50%" + scale_factor = 2.0  → Uses 50% of page width (scale_factor is ignored)
 
+# Mermaid rendering configuration
+[mermaid]
+# Auto scale factor used by the Mermaid renderer (accepts integer or float)
+auto_scale = 2.0
+# Maximum allowed ratio for rendering (clamped to 1.0)
+max_ratio = 1.0
+
 # Regular paragraph text style
 [text]
 size = 8
