@@ -276,20 +276,29 @@ fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageC
 /// ```rust
 /// use markdown2pdf::config::parse_config_string;
 ///
-/// // Parse configuration with custom code block styling
+/// // Parse configuration with custom code block styling and LaTeX section
 /// let config = r#"
 /// [heading.1]
 /// size = 18
 /// bold = true
-///
+/// 
 /// [code]
 /// fontfamily = "Space Mono"
 /// size = 10
 /// backgroundcolor = { r = 245, g = 245, b = 245 }
+///
+/// [latex]
+/// size = 8
+/// textcolor = { r = 0, g = 0, b = 0 }
+/// beforespacing = 0.0
+/// afterspacing = 0.0
+/// alignment = "center"
+/// backgroundcolor = { r = 255, g = 255, b = 255 }
 /// "#;
 /// let style = parse_config_string(config);
 /// assert_eq!(style.heading_1.size, 18);
 /// assert_eq!(style.code.font_family, Some("Space Mono"));
+/// assert_eq!(style.latex.size, 8);
 /// ```
 pub fn parse_config_string(config_str: &str) -> StyleMatch {
     let config: Value = match toml::from_str(config_str) {
@@ -340,6 +349,7 @@ pub fn parse_config_string(config_str: &str) -> StyleMatch {
         link: parse_style(config.get("link"), default_style.link),
         image: parse_style(config.get("image"), default_style.image),
         text: parse_style(config.get("text"), default_style.text),
+        latex: parse_style(config.get("latex"), default_style.latex),
         table_header: parse_style(
             config.get("table").and_then(|t| t.get("header")),
             default_style.table_header,
@@ -694,5 +704,25 @@ mod tests {
 
         assert_eq!(style.margins.top, default_style.margins.top);
         assert_eq!(style.heading_1.size, default_style.heading_1.size);
+    }
+
+    #[test]
+    fn test_parse_latex_style() {
+        let config = r#"
+        [latex]
+        size = 12
+        textcolor = { r = 10, g = 20, b = 30 }
+        beforespacing = 1.5
+        afterspacing = 2.5
+        alignment = "center"
+        backgroundcolor = { r = 255, g = 255, b = 255 }
+        "#;
+
+        let style = parse_config_string(config);
+        assert_eq!(style.latex.size, 12);
+        assert_eq!(style.latex.text_color, Some((10, 20, 30)));
+        assert_eq!(style.latex.before_spacing, 1.5);
+        assert_eq!(style.latex.after_spacing, 2.5);
+        assert_eq!(style.latex.alignment, Some(TextAlignment::Center));
     }
 }

@@ -1426,22 +1426,43 @@ impl Pdf {
     /// ensure consistent sizing with the surrounding text.
     #[cfg(feature = "latex")]
     fn render_math_block(&self, doc: &mut Document, latex_content: &str) {
+        // Add spacing before the math block based on latex style
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.latex.before_spacing,
+        ));
+
         // Use genpdfi_extended's native Latex element when the feature is enabled.
-        // Size in points is derived from the configured text size (slightly larger for display math).
-        let size_pt = (self.style.text.size as f32) * 1.2;
-        let mut latex_elem = genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
-        // center display math
-        let latex_elem = latex_elem.with_alignment(Alignment::Center);
+        // Size in points is taken from the latex style.
+        let size_pt = (self.style.latex.size as f32);
+        let mut latex_elem =
+            genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
+
+        // Apply configured alignment
+        let align = match self.style.latex.alignment {
+            Some(crate::styling::TextAlignment::Left) => Alignment::Left,
+            Some(crate::styling::TextAlignment::Right) => Alignment::Right,
+            Some(crate::styling::TextAlignment::Center) => Alignment::Center,
+            Some(crate::styling::TextAlignment::Justify) => Alignment::Left,
+            None => Alignment::Center,
+        };
+        let latex_elem = latex_elem.with_alignment(align);
         doc.push(latex_elem);
+
+        // Add spacing after the math block
+        doc.push(genpdfi_extended::elements::Break::new(
+            self.style.latex.after_spacing,
+        ));
     }
 
     #[cfg(not(feature = "latex"))]
     fn render_math_block(&self, doc: &mut Document, _latex_content: &str) {
         // Feature disabled: show an informative message instead of rendering
         let mut para = genpdfi_extended::elements::Paragraph::default();
-        let style = genpdfi_extended::style::Style::new()
-            .with_font_size(self.style.text.size)
-            .italic();
+        let mut style = genpdfi_extended::style::Style::new().with_font_size(self.style.latex.size);
+        // apply latex text color if present
+        if let Some((r, g, b)) = self.style.latex.text_color {
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(r, g, b));
+        }
         para.push_styled("need LaTeX feature".to_string(), style);
         doc.push(para);
     }
@@ -1474,19 +1495,20 @@ impl Pdf {
     /// to ensure consistent sizing with the surrounding text.
     #[cfg(feature = "latex")]
     fn render_inline_math_as_image(&self, doc: &mut Document, latex_content: &str) {
-        // Use genpdfi_extended's Latex element in inline mode and size it slightly smaller
-        let size_pt = (self.style.text.size as f32) * 0.9;
+        // Use genpdfi_extended's Latex element in inline mode and size it slightly smaller than configured latex size
+        let size_pt = (self.style.latex.size as f32) * 0.9;
         let latex_elem = genpdfi_extended::elements::Latex::new(latex_content.to_string(), size_pt);
         doc.push(latex_elem);
     }
 
     #[cfg(not(feature = "latex"))]
     fn render_inline_math_as_image(&self, doc: &mut Document, _latex_content: &str) {
-        // Feature disabled: show a small placeholder
+        // Feature disabled: show a small placeholder using latex style
         let mut para = genpdfi_extended::elements::Paragraph::default();
-        let style = genpdfi_extended::style::Style::new()
-            .with_font_size(self.style.text.size)
-            .italic();
+        let mut style = genpdfi_extended::style::Style::new().with_font_size(self.style.latex.size);
+        if let Some((r, g, b)) = self.style.latex.text_color {
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(r, g, b));
+        }
         para.push_styled("need LaTeX feature".to_string(), style);
         doc.push(para);
     }

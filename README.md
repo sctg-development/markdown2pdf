@@ -1,15 +1,148 @@
-<img width="600px" src="https://github.com/user-attachments/assets/fe2e96b8-a0bd-43b4-9360-e6cce43693f2">
+# markdown2pdf
 
 <p align="center">
 
-[![Forked From](https://img.shields.io/badge/forked--from-theiskaa%2Fmarkdown2pdf-blue)](https://github.com/theiskaa/markdown2pdf)
 [![Repository](https://img.shields.io/badge/repo-sctg--development%2Fmarkdown2pdf-green)](https://github.com/sctg-development/markdown2pdf)
-[![Crates.io](https://img.shields.io/badge/crates.io-unpublished-lightgrey)](https://github.com/sctg-development/markdown2pdf)
-[![Documentation](https://img.shields.io/badge/docsrs-unavailable-lightgrey)](https://github.com/sctg-development/markdown2pdf)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/sctg-development/markdown2pdf)](https://github.com/sctg-development/markdown2pdf/stargazers)
 
 </p>
+
+A Rust toolkit to convert Markdown into professional PDFs. Key features:
+
+- LaTeX math (inline and display) via `genpdfi_extended::elements::Latex` 🎓
+- Syntax-highlighted code blocks 🔧
+- Scalable SVG images and sizing controls 🖼️
+- Clickable images/badges (e.g. `[![alt](img)](url)`) 🔗
+- Embedded fonts and Unicode fallback for wide language coverage 🔤
+- Full configuration through `markdown2pdfrc.toml` ⚙️
+
+---
+
+## Highlights
+
+- Renders display math (`$$...$$`) and inline math (`$...$`). When the Cargo feature `latex` is **not** enabled, LaTeX blocks display `need LaTeX feature`.
+- Full SVG support with `[image.svg]` options: `width` (percentage) and `scale_factor`.
+- Images with links and grouping of consecutive images for badge layouts.
+- Font embedding and subsetting to minimize PDF size while keeping correct glyph coverage.
+- Both a CLI and a library API for programmatic use.
+
+---
+
+## Quick Install
+
+From the repository:
+
+```bash
+git clone https://github.com/sctg-development/markdown2pdf
+cd markdown2pdf
+cargo build --release
+```
+
+Install the binary from the repo:
+
+```bash
+cargo install --git https://github.com/sctg-development/markdown2pdf
+```
+
+> Note: LaTeX support is available as a Cargo feature (`latex`). This fork includes it in the default feature set, but you can enable/disable it explicitly:
+>
+> ```bash
+> # Run with latex feature enabled
+> cargo run --features latex --bin markdown2pdf -- -p tests/latex_examples.md -o /tmp/out.pdf
+>
+> # Build without default features
+> cargo build --no-default-features
+> ```
+
+---
+
+## CLI Usage
+
+Convert a file:
+
+```bash
+markdown2pdf -p "docs/resume.md" -o "resume.pdf"
+```
+
+Convert a string:
+
+```bash
+markdown2pdf -s "**bold** and *italic*" -o output.pdf
+```
+
+Useful flags:
+- `-p` source path
+- `-o` output path (default `output.pdf`)
+- `--verbose`, `--quiet`, `--dry-run`
+- `--list-embedded-fonts` to list bundled font families
+
+---
+
+## `[latex]` configuration (markdown2pdfrc)
+
+Default recommended LaTeX configuration:
+
+```toml
+[latex]
+size = 8
+textcolor = { r = 0, g = 0, b = 0 }
+beforespacing = 0.0
+afterspacing = 0.0
+alignment = "center"
+backgroundcolor = { r = 255, g = 255, b = 255 }
+```
+
+- `size`: font size in points used for LaTeX rendering
+- `beforespacing` / `afterspacing`: vertical space around math blocks
+- `alignment`: `left` | `center` | `right` (applies to block math)
+
+---
+
+## Library API (short example)
+
+```rust
+use markdown2pdf::{parse_into_file, config::ConfigSource};
+
+let md = "# Title\n\nSome text and a formula: $E=mc^2$".to_string();
+parse_into_file(md, "out.pdf", ConfigSource::Default, None)?;
+```
+
+Use `ConfigSource::File("path")` or `ConfigSource::Embedded("...toml...")` to customize styling.
+
+---
+
+## Tests & Examples
+
+Run unit and integration tests:
+
+```bash
+cargo test
+```
+
+Verify LaTeX rendering (with feature):
+
+```bash
+cargo run --features latex --bin markdown2pdf -- -p tests/latex_examples.md -o /tmp/latex.pdf
+```
+
+---
+
+## Contributing
+
+Contributions welcome: issues, PRs, tests, and examples. Please:
+
+- Fork → branch → PR
+- Add tests for new features and follow commit conventions
+
+---
+
+## License
+
+MIT — see `LICENSE` for details.
+
+---
+
+If you want, I can add a dedicated "Examples" section with small Markdown snippets (LaTeX, SVG, badges) and non-ignored doctests. Let me know whether you prefer a user-focused tutorial or a developer-focused reference.
 
 > **Fork notice:** This repository is a fork maintained at `https://github.com/sctg-development/markdown2pdf`.
 > 
@@ -25,7 +158,12 @@
 > cargo build --release
 > ```
 >
-markdown2pdf converts Markdown to PDF using a lexical analyzer and PDF rendering engine. The library tokenizes Markdown into semantic elements, applies styling rules from TOML configuration, and generates styled PDF output.
+markdown2pdf convertit des fichiers Markdown en PDFs professionnels.
+
+Il fournit :
+- une CLI simple pour convertir fichiers, URLs ou chaînes de texte en PDF,
+- une API Rust pour intégrer la génération de PDF (rendu en mémoire ou sauvegarde sur disque),
+- un système de configuration via `markdown2pdfrc.toml` pour contrôler style, polices et rendu des images/LaTeX.
 
 Both binary and library are provided. The binary offers CLI conversion from files, URLs, or strings. The library enables programmatic PDF generation with full control over styling and fonts. Configuration can be loaded at runtime or embedded at compile time for containerized deployments.
 

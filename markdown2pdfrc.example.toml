@@ -164,6 +164,15 @@ underline = false
 strikethrough = false
 backgroundcolor = { r = 255, g = 255, b = 255 }
 
+# LaTeX math style
+[latex]
+size = 8
+textcolor = { r = 0, g = 0, b = 0 }
+beforespacing = 0.0
+afterspacing = 0.0
+alignment = "center"
+backgroundcolor = { r = 255, g = 255, b = 255 }
+
 # SVG image rendering configuration
 # Defines how SVG images should be sized in the PDF
 [image.svg]

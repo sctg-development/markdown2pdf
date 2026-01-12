@@ -1,3 +1,11 @@
 [image.svg]
 scale_factor = 3
 #width = "50%"
+
+# [latex]
+# size = 20
+# textcolor = { r = 0, g = 0, b = 0 }
+# beforespacing = 0.0
+# afterspacing = 0.0
+# alignment = "left"
+# backgroundcolor = { r = 255, g = 255, b = 255 }

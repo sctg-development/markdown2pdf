@@ -17,7 +17,7 @@
 //! Note: Full LaTeX rendering examples are excluded from doctests due to
 //! underlying C++ dependencies that may cause runtime crashes in test environment.
 
-use microtex_rs::{MicroTex, RenderConfig, RenderResult, RenderMetrics};
+use microtex_rs::{MicroTex, RenderConfig, RenderMetrics, RenderResult};
 use once_cell::sync::OnceCell;
 use std::sync::Mutex;
 
@@ -108,7 +108,7 @@ fn calculate_scale_factor(
 ) -> f32 {
     let rendered_height = metrics.total_height();
     let baseline_ratio = metrics.baseline_ratio();
-    
+
     // When key character metrics are available, use them for accurate scaling
     // This method is independent of formula complexity (fractions, subscripts, etc.)
     if let Some(kcm) = key_char_metrics {
@@ -116,7 +116,7 @@ fn calculate_scale_factor(
             // Use average key character height instead of total formula height
             // This avoids over-scaling formulas with deep elements (fractions, subscripts)
             let base_scale = target_height / kcm.average_char_height;
-            
+
             // Apply minor adjustments based on display mode
             return if display {
                 // For display mode, key chars provide precise reference
@@ -128,7 +128,7 @@ fn calculate_scale_factor(
             };
         }
     }
-    
+
     // Fallback to original algorithm when key character metrics unavailable
     // Basic scale factor from height matching
     let base_scale = if rendered_height > 0.0 {
@@ -142,7 +142,7 @@ fn calculate_scale_factor(
         // The baseline ratio indicates the visual distribution of the formula
         // Formulas with low baseline (lots of depth) need to be scaled up
         // Formulas with high baseline (tall) need to be scaled down slightly
-        
+
         let baseline_factor = if baseline_ratio < 0.4 {
             // Very deep formulas (many fractions, subscripts)
             // These appear much smaller than they actually are
@@ -161,7 +161,7 @@ fn calculate_scale_factor(
             // Balanced formulas (around 0.5 ratio)
             1.0
         };
-        
+
         base_scale * baseline_factor
     } else {
         // For inline mode, be conservative to avoid disrupting line spacing

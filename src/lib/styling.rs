@@ -191,6 +191,8 @@ pub struct StyleMatch {
     pub image: BasicTextStyle,
     /// Style for regular text
     pub text: BasicTextStyle,
+    /// Style for LaTeX math rendering
+    pub latex: BasicTextStyle,
     /// Style for table headers
     pub table_header: BasicTextStyle,
     /// Style for table cells
@@ -386,6 +388,20 @@ impl Default for StyleMatch {
                 false,
                 false,
                 None,
+            ),
+            // Default LaTeX style (used when the `latex` section is present in TOML)
+            latex: BasicTextStyle::new(
+                8,
+                Some((0, 0, 0)),
+                Some(0.0),
+                Some(0.0),
+                Some(TextAlignment::Center),
+                None,
+                false,
+                false,
+                false,
+                false,
+                Some((255, 255, 255)),
             ),
             horizontal_rule: BasicTextStyle::new(
                 8,
