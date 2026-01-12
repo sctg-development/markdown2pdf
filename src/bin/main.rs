@@ -89,6 +89,38 @@ fn get_output_path(matches: &clap::ArgMatches) -> Result<PathBuf, AppError> {
         .unwrap_or_else(|| current_dir.join("output.pdf")))
 }
 
+/// Detects whether the markdown contains a mermaid fenced code block (```mermaid)
+fn has_mermaid_block(markdown: &str) -> bool {
+    for line in markdown.lines() {
+        let s = line.trim_start();
+        if s.starts_with("```") {
+            // remainder after backticks
+            let rest = s.trim_start_matches('`').trim_start();
+            if rest.to_lowercase().starts_with("mermaid") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn detects_mermaid_block() {
+        let md = "Some text\n```mermaid\ngraph LR\nA-->B\n```";
+        assert!(has_mermaid_block(md));
+    }
+
+    #[test]
+    fn no_mermaid_block() {
+        let md = "# Title\n```rust\nfn main() {}\n```";
+        assert!(!has_mermaid_block(md));
+    }
+}
+
 fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
     // Determine verbosity level
     let verbosity = if matches.get_flag("quiet") {
@@ -194,6 +226,12 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
                 info!("   Fallbacks: {}", cfg.fallback_fonts.join(", "));
             }
         }
+    }
+
+    // If the document contains Mermaid code blocks, notify the user that rendering may be slow
+    // because genpdfi_extended uses headless_chrome (Chrome may be downloaded on first run).
+    if verbosity != Verbosity::Quiet && has_mermaid_block(&markdown) {
+        println!("⚠️  Mermaid blocks detected: rendering uses headless Chrome and may be slow; Chrome may be downloaded on first use.");
     }
 
     // Use parse_into_file_with_images if we have a document path (for relative image resolution)

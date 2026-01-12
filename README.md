@@ -10,6 +10,7 @@
 A Rust toolkit to convert Markdown into professional PDFs. Key features:
 
 - LaTeX math (inline and display) via `genpdfi_extended::elements::Latex` 🎓
+- Mermaid diagrams via `genpdfi_extended::elements::Mermaid` 🧩 (uses headless Chrome; on first run Chrome may be downloaded and rendering can be slow)
 - Syntax-highlighted code blocks 🔧
 - Scalable SVG images and sizing controls 🖼️
 - Clickable images/badges (e.g. `[![alt](img)](url)`) 🔗

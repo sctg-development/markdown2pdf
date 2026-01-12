@@ -27,7 +27,7 @@ name = "markdown2pdf"
 path = "src/bin/main.rs"
 
 [features]
-default = ["fetch", "rustls-tls", "latex"]
+default = ["fetch", "rustls-tls", "latex", "mermaid"]
 fetch = ["dep:reqwest"]
 rustls-tls = ["fetch", "reqwest/rustls"]
 native-tls = ["fetch", "reqwest/native-tls"]
@@ -36,11 +36,16 @@ native-tls = ["fetch", "reqwest/native-tls"]
 # When enabled, this crate will use genpdfi_extended's `latex` feature.
 latex = ["genpdfi_extended/latex"]
 
+# Optional feature to enable Mermaid rendering via genpdfi_extended
+# When enabled, this crate will use genpdfi_extended's `mermaid` feature.
+mermaid = ["genpdfi_extended/mermaid"]
+
 [dependencies]
 #genpdfi_extended = { path = "./genpdfi_extended", features = ["images"] }
 genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended.git", package = "genpdfi_extended", features = [
     "images",
     "latex",
+    "mermaid",
 ] } # printpdf 0.8.2
 printpdf = "0.8.2"
 # microtex_rs removed: LaTeX rendering delegated to genpdfi_extended when feature "latex" is enabled
@@ -66,9 +71,6 @@ syntect = "5.3.0"
 lazy_static = "1.4"
 log = "0.4"
 env_logger = "0.11"
-escape_string = "0.1.2"
-headless_chrome = { version = "1.0.20", features = ["fetch"] }
-unescape = "0.1.0"
 
 [profile.release]
 lto = "thin"

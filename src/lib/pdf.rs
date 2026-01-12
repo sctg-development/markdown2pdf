@@ -354,7 +354,12 @@ impl Pdf {
                     self.flush_consecutive_images(doc, &consecutive_images);
                     current_tokens.clear();
                     consecutive_images.clear();
-                    self.render_code_block(doc, lang, content);
+                    // If the code block language is `mermaid`, render it via genpdfi_extended::elements::Mermaid
+                    if lang.trim().eq_ignore_ascii_case("mermaid") {
+                        self.render_mermaid(doc, content);
+                    } else {
+                        self.render_code_block(doc, lang, content);
+                    }
                 }
                 Token::Math { content, display } if *display => {
                     // Display math ($$...$$) is a block-level element
@@ -1513,6 +1518,33 @@ impl Pdf {
         doc.push(para);
     }
 
+    // Render a Mermaid diagram (fenced code block with language `mermaid`)
+    #[cfg(feature = "mermaid")]
+    fn render_mermaid(&self, doc: &mut Document, content: &str) {
+        // Add spacing before the mermaid block
+        doc.push(genpdfi_extended::elements::Break::new(self.style.code.before_spacing));
+
+        // Use genpdfi_extended's Mermaid element (may use headless_chrome internally)
+        let mer = genpdfi_extended::elements::Mermaid::new(content.to_string());
+        let mer = mer.with_alignment(Alignment::Center).with_auto_scale();
+        doc.push(mer);
+
+        // Add spacing after the mermaid block
+        doc.push(genpdfi_extended::elements::Break::new(self.style.code.after_spacing));
+    }
+
+    #[cfg(not(feature = "mermaid"))]
+    fn render_mermaid(&self, doc: &mut Document, _content: &str) {
+        // Feature disabled: render a placeholder telling the user the feature is required
+        let mut para = genpdfi_extended::elements::Paragraph::default();
+        let mut style = genpdfi_extended::style::Style::new().with_font_size(self.style.code.size);
+        if let Some(color) = self.style.code.text_color {
+            style = style.with_color(genpdfi_extended::style::Color::Rgb(color.0, color.1, color.2));
+        }
+        para.push_styled("need Mermaid feature".to_string(), style);
+        doc.push(para);
+    }
+
     fn render_inline_math(
         &self,
         para: &mut genpdfi_extended::elements::Paragraph,
@@ -1557,6 +1589,37 @@ mod tests {
         // Since FontData's fields are private and it doesn't implement comparison traits,
         // we can only verify that the PDF was created successfully with these fonts
         let doc = pdf.render_into_document();
+        assert!(Pdf::render(doc, "/dev/null").is_none());
+    }
+
+    #[cfg(not(feature = "mermaid"))]
+    #[test]
+    fn test_mermaid_placeholder() {
+        // If the mermaid feature is not enabled, render_mermaid should emit a placeholder
+        let tokens = vec![Token::Code(
+            "mermaid".to_string(),
+            "graph LR\nA-->B".to_string(),
+        )];
+
+        let pdf = create_test_pdf(tokens);
+        let doc = pdf.render_into_document();
+        assert!(Pdf::render(doc, "/dev/null").is_none());
+    }
+
+    #[cfg(feature = "mermaid")]
+    #[test]
+    #[ignore]
+    fn test_mermaid_rendering_ignored() {
+        // This test is ignored by default because Mermaid rendering can be slow and may require
+        // headless Chrome to be downloaded on first run. Run manually when needed.
+        let tokens = vec![Token::Code(
+            "mermaid".to_string(),
+            "graph LR\nA-->B".to_string(),
+        )];
+
+        let pdf = create_test_pdf(tokens);
+        let doc = pdf.render_into_document();
+        // We don't assert anything about content; the purpose is to ensure rendering doesn't panic
         assert!(Pdf::render(doc, "/dev/null").is_none());
     }
 
