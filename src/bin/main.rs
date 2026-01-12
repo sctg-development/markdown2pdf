@@ -1,6 +1,6 @@
 use clap::{Arg, Command};
+use log::{debug, error, info, warn};
 use markdown2pdf::validation;
-use log::{debug, info, warn, error};
 #[cfg(feature = "fetch")]
 use reqwest::blocking::Client;
 use std::fs;
@@ -66,9 +66,9 @@ fn get_markdown_path(matches: &clap::ArgMatches) -> Option<PathBuf> {
 fn get_config_source(matches: &clap::ArgMatches) -> markdown2pdf::config::ConfigSource {
     // Check if --config was explicitly provided
     if let Some(config_file) = matches.get_one::<String>("config") {
-        return markdown2pdf::config::ConfigSource::File(
-            Box::leak(config_file.to_string().into_boxed_str()),
-        );
+        return markdown2pdf::config::ConfigSource::File(Box::leak(
+            config_file.to_string().into_boxed_str(),
+        ));
     }
 
     // Check if markdown2pdfrc.toml exists in current directory
@@ -236,10 +236,10 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
 
     // Use parse_into_file_with_images if we have a document path (for relative image resolution)
     // Otherwise use the basic parse_into_file
-    
+
     // Determine configuration source based on CLI args or defaults
     let config_source = get_config_source(&matches);
-    
+
     if let Some(path) = markdown_path {
         markdown2pdf::parse_into_file_with_images(
             markdown,
@@ -354,9 +354,25 @@ fn main() {
 
         #[test]
         fn test_list_embedded_flag() {
-            let cmd = Command::new("test").arg(Arg::new("list-embedded-fonts").long("list-embedded-fonts"));
+            let cmd = Command::new("test")
+                .arg(Arg::new("list-embedded-fonts").long("list-embedded-fonts"));
             let matches = cmd.get_matches_from(vec!["test", "--list-embedded-fonts"]);
             assert!(matches.get_flag("list-embedded-fonts"));
+        }
+
+        #[test]
+        fn test_get_default_configuration_flag() {
+            let cmd = Command::new("test")
+                .arg(Arg::new("get-default-configuration").long("get-default-configuration"));
+            let matches = cmd.get_matches_from(vec!["test", "--get-default-configuration"]);
+            assert!(matches.get_flag("get-default-configuration"));
+
+            // The default configuration string should parse back into defaults
+            let s = markdown2pdf::config::default_config_toml();
+            let parsed = markdown2pdf::config::parse_config_string(&s);
+            let default = markdown2pdf::styling::StyleMatch::default();
+            assert_eq!(parsed.heading_1.size, default.heading_1.size);
+            assert_eq!(parsed.mermaid.auto_scale, default.mermaid.auto_scale);
         }
 
         #[test]
@@ -379,10 +395,9 @@ fn main() {
         #[test]
         fn test_get_config_source_explicit_config() {
             // Test explicit --config argument takes priority
-            let cmd = Command::new("test")
-                .arg(Arg::new("config").short('c').long("config"));
+            let cmd = Command::new("test").arg(Arg::new("config").short('c').long("config"));
             let matches = cmd.get_matches_from(vec!["test", "--config", "custom.toml"]);
-            
+
             let config_source = get_config_source(&matches);
             match config_source {
                 markdown2pdf::config::ConfigSource::File(path) => {
@@ -395,19 +410,18 @@ fn main() {
         #[test]
         fn test_get_config_source_default_when_no_args() {
             // Test that Default is returned when no config args and no markdown2pdfrc.toml
-            let cmd = Command::new("test")
-                .arg(Arg::new("config").short('c').long("config"));
+            let cmd = Command::new("test").arg(Arg::new("config").short('c').long("config"));
             let matches = cmd.get_matches_from(vec!["test"]);
-            
+
             // Save current dir and change to a temp dir without markdown2pdfrc.toml
             let original_dir = env::current_dir().unwrap();
             let temp_dir = env::temp_dir().join("md_test_no_config");
             let _ = fs::create_dir(&temp_dir);
             let _ = env::set_current_dir(&temp_dir);
-            
+
             // Ensure markdown2pdfrc.toml doesn't exist
             let _ = fs::remove_file("markdown2pdfrc.toml");
-            
+
             let config_source = get_config_source(&matches);
             match config_source {
                 markdown2pdf::config::ConfigSource::Default => {
@@ -415,7 +429,7 @@ fn main() {
                 }
                 _ => panic!("Expected Default config source when no markdown2pdfrc.toml exists"),
             }
-            
+
             // Cleanup and restore
             let _ = env::set_current_dir(&original_dir);
             let _ = fs::remove_dir_all(&temp_dir);
@@ -513,6 +527,12 @@ fn main() {
                 .long("list-embedded-fonts")
                 .help("List embedded binary fonts and exit")
                 .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("get-default-configuration")
+                .long("get-default-configuration")
+                .help("Print a default markdown2pdfrc.toml to stdout and exit")
+                .action(clap::ArgAction::SetTrue),
         );
 
     let matches = cmd.clone().get_matches();
@@ -523,6 +543,12 @@ fn main() {
         for f in markdown2pdf::embedded_fonts::known_embedded_families() {
             println!("{}", f);
         }
+        process::exit(0);
+    }
+
+    // Print a default configuration TOML and exit if requested
+    if matches.get_flag("get-default-configuration") {
+        println!("{}", markdown2pdf::config::default_config_toml());
         process::exit(0);
     }
 

@@ -457,6 +457,152 @@ pub fn load_config_from_source(source: ConfigSource) -> StyleMatch {
     }
 }
 
+/// Generate a TOML string representing the defaults from `StyleMatch::default()`.
+/// This keeps the default config DRY by deriving values from the in-code defaults.
+pub fn default_config_toml() -> String {
+    use toml::{map::Map, Value};
+
+    let def = crate::styling::StyleMatch::default();
+
+    fn alignment_to_str(a: Option<crate::styling::TextAlignment>) -> Option<&'static str> {
+        match a {
+            Some(crate::styling::TextAlignment::Left) => Some("left"),
+            Some(crate::styling::TextAlignment::Center) => Some("center"),
+            Some(crate::styling::TextAlignment::Right) => Some("right"),
+            Some(crate::styling::TextAlignment::Justify) => Some("justify"),
+            None => None,
+        }
+    }
+
+    fn style_to_table(s: crate::styling::BasicTextStyle) -> Value {
+        let mut m = Map::new();
+        m.insert("size".into(), Value::Integer(s.size as i64));
+        if let Some((r, g, b)) = s.text_color {
+            let mut c = Map::new();
+            c.insert("r".into(), Value::Integer(r as i64));
+            c.insert("g".into(), Value::Integer(g as i64));
+            c.insert("b".into(), Value::Integer(b as i64));
+            m.insert("textcolor".into(), Value::Table(c));
+        }
+        if s.before_spacing != 0.0 {
+            m.insert(
+                "beforespacing".into(),
+                Value::Float(s.before_spacing as f64),
+            );
+        }
+        if s.after_spacing != 0.0 {
+            m.insert("afterspacing".into(), Value::Float(s.after_spacing as f64));
+        }
+        if let Some(a) = alignment_to_str(s.alignment) {
+            m.insert("alignment".into(), Value::String(a.into()));
+        }
+        if let Some(f) = s.font_family {
+            m.insert("fontfamily".into(), Value::String(f.into()));
+        }
+        if s.bold {
+            m.insert("bold".into(), Value::Boolean(true));
+        }
+        if s.italic {
+            m.insert("italic".into(), Value::Boolean(true));
+        }
+        if s.underline {
+            m.insert("underline".into(), Value::Boolean(true));
+        }
+        if s.strikethrough {
+            m.insert("strikethrough".into(), Value::Boolean(true));
+        }
+        if let Some((r, g, b)) = s.background_color {
+            let mut c = Map::new();
+            c.insert("r".into(), Value::Integer(r as i64));
+            c.insert("g".into(), Value::Integer(g as i64));
+            c.insert("b".into(), Value::Integer(b as i64));
+            m.insert("backgroundcolor".into(), Value::Table(c));
+        }
+        Value::Table(m)
+    }
+
+    let mut root = Map::new();
+
+    // margin
+    let mut margin = Map::new();
+    margin.insert("top".into(), Value::Float(def.margins.top as f64));
+    margin.insert("right".into(), Value::Float(def.margins.right as f64));
+    margin.insert("bottom".into(), Value::Float(def.margins.bottom as f64));
+    margin.insert("left".into(), Value::Float(def.margins.left as f64));
+    root.insert("margin".into(), Value::Table(margin));
+
+    // headings
+    let mut headings = Map::new();
+    headings.insert(
+        "1".into(),
+        match style_to_table(def.heading_1) {
+            Value::Table(t) => Value::Table(t),
+            _ => unreachable!(),
+        },
+    );
+    headings.insert(
+        "2".into(),
+        match style_to_table(def.heading_2) {
+            Value::Table(t) => Value::Table(t),
+            _ => unreachable!(),
+        },
+    );
+    headings.insert(
+        "3".into(),
+        match style_to_table(def.heading_3) {
+            Value::Table(t) => Value::Table(t),
+            _ => unreachable!(),
+        },
+    );
+    root.insert("heading".into(), Value::Table(headings));
+
+    // other styles
+    root.insert("emphasis".into(), style_to_table(def.emphasis));
+    root.insert(
+        "strong_emphasis".into(),
+        style_to_table(def.strong_emphasis),
+    );
+    root.insert("code".into(), style_to_table(def.code));
+    root.insert("block_quote".into(), style_to_table(def.block_quote));
+    root.insert("list_item".into(), style_to_table(def.list_item));
+    root.insert("link".into(), style_to_table(def.link));
+    root.insert("image".into(), style_to_table(def.image));
+    root.insert("latex".into(), style_to_table(def.latex));
+
+    // image.svg
+    let mut image = Map::new();
+    let mut svg = Map::new();
+    svg.insert(
+        "scale_factor".into(),
+        Value::Float(def.svg_config.scale_factor as f64),
+    );
+    image.insert("svg".into(), Value::Table(svg));
+    root.insert("image".into(), Value::Table(image));
+
+    // mermaid
+    let mut mer = Map::new();
+    mer.insert(
+        "auto_scale".into(),
+        Value::Float(def.mermaid.auto_scale as f64),
+    );
+    mer.insert(
+        "max_ratio".into(),
+        Value::Float(def.mermaid.max_ratio as f64),
+    );
+    root.insert("mermaid".into(), Value::Table(mer));
+
+    // text
+    root.insert("text".into(), style_to_table(def.text));
+
+    // horizontal rule
+    root.insert(
+        "horizontal_rule".into(),
+        style_to_table(def.horizontal_rule),
+    );
+
+    toml::to_string(&Value::Table(root)).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -792,5 +938,26 @@ mod tests {
         assert_eq!(style.latex.before_spacing, 1.5);
         assert_eq!(style.latex.after_spacing, 2.5);
         assert_eq!(style.latex.alignment, Some(TextAlignment::Center));
+    }
+
+    #[test]
+    fn test_default_config_toml_roundtrips() {
+        let s = default_config_toml();
+        // Should parse into a StyleMatch similar to defaults
+        let parsed = parse_config_string(&s);
+        let default = StyleMatch::default();
+
+        assert_eq!(parsed.margins.top, default.margins.top);
+        assert_eq!(parsed.heading_1.size, default.heading_1.size);
+        assert_eq!(parsed.code.font_family, default.code.font_family);
+        assert_eq!(parsed.mermaid.auto_scale, default.mermaid.auto_scale);
+        assert_eq!(parsed.mermaid.max_ratio, default.mermaid.max_ratio);
+
+        // And should be loadable from file
+        let tmp = std::env::temp_dir().join("md2pdf_default_config.toml");
+        std::fs::write(&tmp, &s).unwrap();
+        let style2 = load_config_from_source(ConfigSource::File(tmp.to_str().unwrap()));
+        let _ = std::fs::remove_file(&tmp);
+        assert_eq!(style2.heading_1.size, default.heading_1.size);
     }
 }
