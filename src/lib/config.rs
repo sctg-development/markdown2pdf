@@ -83,7 +83,10 @@
 //! A complete example configuration file can be found in markdown2pdfrc.example.toml which
 //! demonstrates all available styling options.
 
-use crate::styling::{BasicTextStyle, Margins, StyleMatch, TextAlignment, SvgImageConfig, SvgWidth, SvgHeight, MermaidConfig};
+use crate::styling::{
+    BasicTextStyle, Margins, MermaidConfig, StyleMatch, SvgHeight, SvgImageConfig, SvgWidth,
+    TextAlignment,
+};
 use std::fs;
 use std::path::Path;
 use toml::Value;
@@ -207,7 +210,7 @@ fn parse_style(value: Option<&Value>, default: BasicTextStyle) -> BasicTextStyle
 /// - omitted for auto (maintain aspect ratio)
 fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageConfig {
     let mut config = default;
-    
+
     if let Some(svg_config) = value {
         // Parse width
         if let Some(width_val) = svg_config.get("width") {
@@ -225,7 +228,7 @@ fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageC
                 }
             }
         }
-        
+
         // Parse height
         if let Some(height_val) = svg_config.get("height") {
             if let Some(height_str) = height_val.as_str() {
@@ -238,7 +241,7 @@ fn parse_svg_config(value: Option<&Value>, default: SvgImageConfig) -> SvgImageC
                 }
             }
         }
-        
+
         // Parse scale_factor
         if let Some(scale_val) = svg_config.get("scale_factor") {
             let scale_f = if let Some(f) = scale_val.as_float() {
@@ -310,7 +313,7 @@ fn parse_mermaid_config(value: Option<&Value>, default: MermaidConfig) -> Mermai
 /// [heading.1]
 /// size = 18
 /// bold = true
-/// 
+///
 /// [code]
 /// fontfamily = "Space Mono"
 /// size = 10
