@@ -15,6 +15,16 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Clean runner for space (Ubuntu)
+        uses: sctg-development/clean-image-for-docker@v2
+        # Optional parameters
+        with:
+          remove-development-tools: "false"
+          remove-browsers: "true"
+          remove-android: "true"
+          remove-databases: "true"
+          remove-cloud-tools: "true"
+          show-top-packages: "true"
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install dependencies
