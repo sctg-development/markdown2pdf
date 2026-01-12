@@ -1306,7 +1306,7 @@ dependencies = [
 [[package]]
 name = "genpdfi_extended"
 version = "0.4.0"
-source = "git+https://github.com/sctg-development/genpdfi-extended.git#26e443634ae074ce49d2c4abe87de222f7a89da2"
+source = "git+https://github.com/sctg-development/genpdfi-extended.git#84a634157671110ea7ac3df0bb68905969163f19"
 dependencies = [
  "clap",
  "derive_more 2.1.1",

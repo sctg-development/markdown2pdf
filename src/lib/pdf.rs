@@ -1526,7 +1526,7 @@ impl Pdf {
 
         // Use genpdfi_extended's Mermaid element (may use headless_chrome internally)
         let mer = genpdfi_extended::elements::Mermaid::new(content.to_string());
-        let mer = mer.with_alignment(Alignment::Center).with_auto_scale();
+        let mer = mer.with_alignment(Alignment::Center);
         doc.push(mer);
 
         // Add spacing after the mermaid block
