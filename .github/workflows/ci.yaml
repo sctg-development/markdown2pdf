@@ -76,7 +76,7 @@ jobs:
           rm -rf target
 
       - name: Generate coverage (Tarpaulin)
-        run: cargo tarpaulin --out Xml --output-dir coverage
+        run: cargo tarpaulin --exclude-files 'src/bin/test_mermaid.rs' --out Xml --output-dir coverage
 
       - name: Upload cobertura artifact
         uses: actions/upload-artifact@v4
