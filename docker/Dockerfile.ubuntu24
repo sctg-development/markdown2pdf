@@ -78,7 +78,7 @@ RUN echo "=== System Information ===" && \
 RUN echo "=== Build Release ===" && \
     cargo build --all-features --release --bin markdown2pdf && \
     echo "=== Install cargo-deb and build .deb ===" && \
-    cargo install --locked cargo-deb || true && \
+    cargo install --locked cargo-deb && \
     # Try to create package without rebuilding; fall back to rebuilding if necessary
     (cargo deb --no-build || cargo deb) && \
     ls -l target/debian || true
