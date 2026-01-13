@@ -41,7 +41,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./docker
-          file: ./docker/Dockerfile.multiarch
+          file: ./docker/Dockerfile.ubuntu24
           platforms: linux/amd64,linux/arm64
           push: true
           tags: sctg/markdown2pdf:latest, sctg/markdown2pdf:${{ env.TAG }}

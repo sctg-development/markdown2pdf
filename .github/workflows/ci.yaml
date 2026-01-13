@@ -146,6 +146,14 @@ jobs:
       TARGET: aarch64-apple-darwin
       PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig
     steps:
+      - name: Clean runner for Docker builds
+        uses: sctg-development/clean-image-for-docker@docker-storage
+        with:
+          remove-development-tools: "true"
+          remove-browsers: "true"
+          remove-databases: "true"
+          remove-cloud-tools: "true"
+          show-top-packages: "true"
       - uses: actions/checkout@v6
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
