@@ -677,7 +677,6 @@ flowchart LR
 "#,
 ];
 #[test]
-#[ignore]
 fn render_each_mermaid_block_to_pdf() {
     // Use the embedded constant blocks (extracted from the original document by a script).
     let blocks: Vec<&str> = MERMAID_BLOCKS.iter().copied().collect();
