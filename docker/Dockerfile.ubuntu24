@@ -1,0 +1,92 @@
+FROM ubuntu:24.04 AS builder
+
+# Avoid interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build essentials
+    build-essential \
+    git \
+    curl \
+    xz-utils \
+    \
+    # CMake (required for building vendored dependencies)
+    cmake \
+    \
+    # Clang for bindgen FFI code generation
+    clang \
+    libclang-dev \
+    \
+    # Development headers for graphics libraries
+    libcairo2-dev \
+    libpango1.0-dev \
+    libpangocairo-1.0-0 \
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libharfbuzz-dev \
+    libglib2.0-dev \
+    libpixman-1-dev \
+    libpng-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libssl-dev \
+    \
+    # X11 development libraries (required for Cairo to build properly)
+    libx11-dev \
+    libxrender-dev \
+    libxcb1-dev \
+    libxcb-render0-dev \
+    libxcb-shm0-dev \
+    \
+    # pkg-config for finding libraries
+    pkg-config \
+    \
+    # Python for build scripts
+    python3 \
+    \
+    # Utilities
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust using rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && rustc --version \
+    && cargo --version
+
+# Create working directory
+WORKDIR /workspace
+
+# Copy the entire project
+COPY . .
+
+# Display environment information
+RUN echo "=== System Information ===" && \
+    uname -a && \
+    echo "\n=== Compiler Information ===" && \
+    rustc --version && \
+    cargo --version && \
+    cmake --version && \
+    echo "\n=== Library Dependencies ===" && \
+    pkg-config --list-all | grep -E "(cairo|pango|fontconfig|freetype|harfbuzz)" || echo "Libraries will be vendored"
+
+# Build release version
+RUN echo "=== Build Release ===" && \
+    cargo build --all-features --release --bin markdown2pdf && \
+    echo "=== Install cargo-deb and build .deb ===" && \
+    cargo install --locked cargo-deb || true && \
+    # Try to create package without rebuilding; fall back to rebuilding if necessary
+    (cargo deb --no-build || cargo deb) && \
+    ls -l target/debian || true
+
+FROM ubuntu:24.04 AS ubuntu24-packager
+RUN apt-get update && apt-get install -y --no-install-recommends libpangocairo-1.0-0
+# Install runtime dependencies
+COPY --from=builder /workspace/target/release/markdown2pdf /usr/local/bin/markdown2pdf
+# Copy generated deb package(s)
+RUN mkdir -p /out
+COPY --from=builder /workspace/target/debian/*.deb /out/
+ENTRYPOINT ["/usr/local/bin/markdown2pdf"]
