@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-test:
+  build-and-test-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - name: Clean runner for space (Ubuntu)
@@ -91,6 +91,129 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
           CODECOV_SLUG: sctg-development/markdown2pdf
+
+  build-macos-amd64:
+    name: Build macOS (amd64)
+    runs-on: macos-latest
+    env:
+      TARGET: x86_64-apple-darwin
+      PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig
+    steps:
+      - uses: actions/checkout@v6
+      # install meson and nija with --break-system-packages
+      - name: Install meson and ninja
+        run: |
+          python3 -m pip install --break-system-packages meson ninja
+      - name: Install Homebrew x86_64
+        shell: bash
+        run: |
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+      - name: Install dependencies (x86_64)
+        shell: bash
+        run: |
+          arch -x86_64 /usr/local/bin/brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
+      - name: Verify pango installation
+        shell: bash
+        run: |
+          arch -x86_64 /usr/local/bin/brew list pango
+          arch -x86_64 /usr/local/bin/pkg-config --list-all | grep pango
+      # install meson and nija with --break-system-packages
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Add target
+        run: rustup target add $TARGET
+      - name: Build (release for $TARGET)
+        run: cargo build --all-features --release --target $TARGET --bin markdown2pdf
+      - name: Note about tests
+        run: |
+          echo "Cross-compiling for $TARGET; running tests for the build target is not supported on this runner."
+
+  build-macos-arm64:
+    name: Build macOS (arm64)
+    # This job targets a macOS arm64 runner (macos-latest is arm64).
+    runs-on: macos-latest
+    env:
+      TARGET: aarch64-apple-darwin
+      PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig
+    steps:
+      - uses: actions/checkout@v6
+      # install meson and nija with --break-system-packages
+      - name: Install meson and ninja
+        run: |
+          python3 -m pip install --break-system-packages meson ninja
+      - name: Install dependencies
+        shell: bash
+        run: |
+          brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
+      - name: Verify pango installation
+        shell: bash
+        run: |
+          brew list pango
+          pkg-config --list-all | grep pango
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Add target (aarch64)
+        run: rustup target add $TARGET || true
+      - name: Build (release for host)
+        # Build for the native host architecture; explicit target available as $TARGET
+        run: cargo build --all-features --release --target $TARGET --bin markdown2pdf
+      - name: Run tests (host)
+        # Tests run on the runner for the host arch
+        run: cargo test --all-features --no-fail-fast
+  build-windows:
+    name: Build Windows (x86_64)
+    runs-on: windows-latest
+    env:
+      TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Add target
+        run: rustup target add ${{ env.TARGET }}
+      - name: Install vcpkg
+        shell: bash
+        run: |
+          if [ ! -d "C:/vcpkg" ]; then
+            git clone https://github.com/Microsoft/vcpkg.git C:/vcpkg
+            C:/vcpkg/bootstrap-vcpkg.bat
+          fi
+      - name: Install dependencies via vcpkg
+        shell: bash
+        run: |
+          C:/vcpkg/vcpkg.exe install cairo:x64-windows pango:x64-windows fontconfig:x64-windows pkgconf:x64-windows libpng:x64-windows freetype:x64-windows harfbuzz:x64-windows pixman:x64-windows libffi:x64-windows pcre2:x64-windows zlib:x64-windows bzip2:x64-windows lzo:x64-windows
+      - name: Set VCPKG_ROOT
+        shell: bash
+        run: echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build (release for ${{ env.TARGET }})
+        run: cargo build --all-features --release --target ${{ env.TARGET }} --bin markdown2pdf
+      - name: Note about tests
+        run: |
+          echo "Note: Tests for Windows are not run in CI at this time."
 
   docs:
     runs-on: ubuntu-latest
