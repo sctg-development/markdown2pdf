@@ -16,6 +16,14 @@ jobs:
     name: Build and publish Docker images
     runs-on: ubuntu-latest
     steps:
+      - name: Clean runner for Docker builds
+        uses: sctg-development/clean-image-for-docker@docker-storage
+        with:
+          remove-development-tools: "true"
+          remove-browsers: "true"
+          remove-databases: "true"
+          remove-cloud-tools: "true"
+          show-top-packages: "true"
       - name: Checkout repository
         uses: actions/checkout@v6
 
