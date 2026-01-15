@@ -1306,7 +1306,7 @@ dependencies = [
 [[package]]
 name = "genpdfi_extended"
 version = "0.6.0"
-source = "git+https://github.com/sctg-development/genpdfi-extended.git#053b892fe5d3a4b5e543262e97e1cc3719999e21"
+source = "git+https://github.com/sctg-development/genpdfi-extended.git#79d549e957d8fba572cdd2fda1d62bea8074aeb8"
 dependencies = [
  "clap",
  "derive_more 2.1.1",
@@ -2212,7 +2212,7 @@ dependencies = [
 [[package]]
 name = "microtex_rs"
 version = "0.1.1"
-source = "git+https://github.com/sctg-development/microtex_rs?branch=main#397d8405de773c907e9a7b1dd7777ae3b9ff8e4a"
+source = "git+https://github.com/sctg-development/microtex_rs?branch=main#2d673707d03fed2662000038d497ba69106c8e9f"
 dependencies = [
  "bindgen",
  "byteorder",
