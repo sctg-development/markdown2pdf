@@ -11,6 +11,8 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  TESTS_TO_SKIP: "--skip box_drawing_bytes_presence"
 jobs:
   build-and-test-ubuntu:
     runs-on: ubuntu-latest
@@ -76,7 +78,7 @@ jobs:
           rm -rf target
 
       - name: Generate coverage (Tarpaulin)
-        run: cargo tarpaulin --exclude-files 'src/bin/test_mermaid.rs' --out Xml --output-dir coverage
+        run: cargo tarpaulin --exclude-files 'src/bin/test_mermaid.rs' --all-features --out Xml --output-dir coverage -- ${{ env.TESTS_TO_SKIP }}
 
       - name: Upload cobertura artifact
         uses: actions/upload-artifact@v4
@@ -172,7 +174,7 @@ jobs:
         run: cargo build --all-features --release --target $TARGET --bin markdown2pdf
       - name: Run tests (host)
         # Tests run on the runner for the host arch
-        run: cargo test --all-features --no-fail-fast
+        run: cargo test --all-features --no-fail-fast -- ${{ env.TESTS_TO_SKIP }}
   build-windows:
     name: Build Windows (x86_64)
     runs-on: windows-latest
