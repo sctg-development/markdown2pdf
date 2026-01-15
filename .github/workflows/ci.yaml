@@ -94,7 +94,7 @@ jobs:
         run: cargo build --workspace --all-features --release --target $TARGET
       - name: Run tests (host)
         # Tests run on the runner for the host arch
-        run: cargo test --workspace --all-features --no-fail-fast ${{env.TESTS_TO_SKIP}}
+        run: cargo test --workspace --all-features --no-fail-fast -- ${{env.TESTS_TO_SKIP}}
 
   build-ubuntu:
     name: Build Ubuntu (${{ matrix.arch }})
@@ -133,7 +133,7 @@ jobs:
       - name: Build (release)
         run: cargo build --workspace --all-features --release
       - name: Run tests
-        run: cargo test --workspace --all-features --no-fail-fast ${{env.TESTS_TO_SKIP}}
+        run: cargo test --workspace --all-features --no-fail-fast -- ${{env.TESTS_TO_SKIP}}
 
   build-windows:
     name: Build Windows (x86_64)
@@ -204,7 +204,7 @@ jobs:
       - name: Run tarpaulin and generate Cobertura XML
         # Generate coverage report in Cobertura-compatible XML
         run: |
-          cargo tarpaulin --out Xml --all-features ${{env.TESTS_TO_SKIP}} --no-fail-fast
+          cargo tarpaulin --out Xml --all-features --no-fail-fast -- ${{env.TESTS_TO_SKIP}}
           # tarpaulin may output multiple xml filenames; normalize to cobertura.xml
           if [ -f tarpaulin-report.xml ]; then mv tarpaulin-report.xml cobertura.xml; fi
           if [ -f coverage.xml ] && [ ! -f cobertura.xml ]; then mv coverage.xml cobertura.xml; fi
