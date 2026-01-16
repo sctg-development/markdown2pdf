@@ -16,7 +16,7 @@ env:
 jobs:
   build-macos-amd64:
     name: Build macOS (amd64)
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     env:
       TARGET: x86_64-apple-darwin
       PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig
@@ -34,16 +34,16 @@ jobs:
       - name: Install Homebrew x86_64
         shell: bash
         run: |
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
       - name: Install dependencies (x86_64)
         shell: bash
         run: |
-          arch -x86_64 /usr/local/bin/brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
+          brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
       - name: Verify pango installation
         shell: bash
         run: |
-          arch -x86_64 /usr/local/bin/brew list pango
-          arch -x86_64 /usr/local/bin/pkg-config --list-all | grep pango
+          brew list pango
+          pkg-config --list-all | grep pango
       # install meson and nija with --break-system-packages
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
