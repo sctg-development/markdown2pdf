@@ -164,8 +164,37 @@ jobs:
         with:
           toolchain: stable
           override: true
+      - name: Check node/npm version under powershell
+        shell: pwsh
+        run: |
+          node --version
+          npm --version
       - name: Add target
         run: rustup target add ${{ env.TARGET }}
+      - name: Cargo fetch dependencies
+        shell: pwsh
+        run: |
+          # Ensure cargo has fetched git checkouts so we can pre-build web assets
+          cargo fetch --workspace --all-features
+      - name: Prebuild genpdfi_extended web helper
+        shell: pwsh
+        run: |
+          # Locate the genpdfi-extended checkout and run npm build in mermaid_pool if present
+          $p = Get-ChildItem "$env:USERPROFILE\.cargo\git\checkouts" -Directory -Recurse | Where-Object { $_.Name -like 'genpdfi-extended*' } | Select-Object -First 1
+          if ($p) {
+            Write-Host "Found $($p.FullName). Running npm ci && npm run build in mermaid_pool if present"
+            $pool = Join-Path $p.FullName 'mermaid_pool'
+            if (Test-Path $pool) {
+              Push-Location $pool
+              npm ci
+              npm run build
+              Pop-Location
+            } else {
+              Write-Host "mermaid_pool not found under $($p.FullName)"
+            }
+          } else {
+            Write-Host "genpdfi_extended checkout not found, skipping prebuild"
+          }
       - name: Install vcpkg
         shell: bash
         run: |
