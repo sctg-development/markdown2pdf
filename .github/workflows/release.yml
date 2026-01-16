@@ -1,85 +1,290 @@
-name: Generate multi-arch releases
-
-permissions:
-  id-token: write
-  contents: write
-  attestations: write
-  packages: write
+name: Release markdown2pdf
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+    workflow_dispatch: {}
+    push:
+        tags: ["v*.*.*", "v*"]
+
+permissions:
+    contents: write
+    id-token: write
 
 jobs:
-  build-and-publish-docker-images:
-    name: Build and publish Docker images
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clean runner for Docker builds
-        uses: sctg-development/clean-image-for-docker@docker-storage
-        with:
-          remove-development-tools: "true"
-          remove-browsers: "true"
-          remove-databases: "true"
-          remove-cloud-tools: "true"
-          show-top-packages: "true"
+    build:
+        name: Build for ${{ matrix.name }}
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            matrix:
+                include:
+                    - name: ubuntu-24.04-amd64
+                      runner: ubuntu-24.04
+                      arch: amd64
+                      target: x86_64-unknown-linux-gnu
+                      ext: tar.gz
+                    - name: ubuntu-24.04-arm64
+                      runner: ubuntu-24.04-arm
+                      arch: arm64
+                      target: aarch64-unknown-linux-gnu
+                      ext: tar.gz
+                    - name: windows-amd64
+                      runner: windows-latest
+                      arch: amd64
+                      target: x86_64-pc-windows-msvc
+                      ext: zip
+                    - name: macos-amd64
+                      runner: macos-15-intel
+                      arch: amd64
+                      target: x86_64-apple-darwin
+                      ext: tar.gz
+                    - name: macos-arm64
+                      runner: macos-latest
+                      arch: arm64
+                      target: aarch64-apple-darwin
+                      ext: tar.gz
+        steps:
+            - uses: actions/checkout@v6
 
-      - name: Checkout repository
-        uses: actions/checkout@v6
+            - name: Cache Cargo registry and index
+              uses: actions/cache@v5
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                  key: ${{ runner.os }}-cargo-registry-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-registry-${{ matrix.target }}-
+                      ${{ runner.os }}-cargo-registry-
 
-      - name: Determine release tag
-        id: determine_tag
-        run: |
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "TAG=nightly" >> $GITHUB_ENV
-          else
-            echo "TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
-          fi
+            - name: Cache cargo target
+              uses: actions/cache@v5
+              with:
+                  path: target
+                  key: ${{ runner.os }}-cargo-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-target-${{ matrix.target }}-
+                      ${{ runner.os }}-cargo-target-
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+            - name: Install system deps (Ubuntu)
+              if: matrix.runner == 'ubuntu-24.04' || matrix.runner == 'ubuntu-24.04-arm'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libcairo2-dev libpango1.0-dev libfontconfig1-dev pkg-config
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+            - name: Install Homebrew x86_64
+              shell: bash
+              run: |
+                  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            - name: Install dependencies (x86_64)
+              shell: bash
+              run: |
+                  brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
 
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v4
-        with:
-          file: ./docker/Dockerfile.ubuntu24
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: sctg/markdown2pdf:latest, sctg/markdown2pdf:${{ env.TAG }}
+            - name: Install system deps (macOS arm64)
+              if: matrix.runner == 'macos-latest' && matrix.arch == 'arm64'
+              shell: bash
+              run: |
+                  brew update 
+                  brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
 
-      - name: Pull images and mount to different arch for extracting binary
-        run: |
-          mkdir -p ${{ github.workspace }}/release-artifacts
-          docker pull sctg/markdown2pdf:latest
-          docker run --rm --platform linux/amd64 -v ${{ github.workspace }}/release-artifacts:/artifacts sctg/markdown2pdf:latest cp /usr/local/bin/markdown2pdf /artifacts/markdown2pdf-linux-amd64
-          docker run --rm --platform linux/amd64 -v ${{ github.workspace }}/release-artifacts:/artifacts sctg/markdown2pdf:latest cp /out/*.deb /artifacts/ || true
-          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}/release-artifacts:/artifacts sctg/markdown2pdf:latest cp /usr/local/bin/markdown2pdf /artifacts/markdown2pdf-linux-arm64
-          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}/release-artifacts:/artifacts sctg/markdown2pdf:latest cp /out/*.deb /artifacts/ || true
-      - name: List release artifacts
-        run: ls -la ${{ github.workspace }}/release-artifacts
+            - name: Cache vcpkg (Windows)
+              if: matrix.runner == 'windows-latest'
+              uses: actions/cache@v5
+              with:
+                  path: |
+                      C:/vcpkg/installed
+                      C:/vcpkg/downloads
+                      C:/vcpkg/packages
+                  key: ${{ runner.os }}-vcpkg-${{ matrix.target }}-${{ hashFiles('**/vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-${{ matrix.target }}-
+                      ${{ runner.os }}-vcpkg-
 
-      - name: Upload release artifacts using GitHub CLI (release)
-        if: ${{ github.event_name == 'release' }}
-        shell: bash
-        run: |
-          gh release upload ${{ github.event.release.tag_name }} ${{ github.workspace }}/release-artifacts/* --clobber
+            - name: Install system deps (Windows)
+              if: matrix.runner == 'windows-latest'
+              shell: bash
+              run: |
+                  if [ ! -d "C:/vcpkg" ]; then
+                    git clone https://github.com/Microsoft/vcpkg.git C:/vcpkg
+                    C:/vcpkg/bootstrap-vcpkg.bat
+                  fi
+                  C:/vcpkg/vcpkg.exe install cairo:x64-windows pango:x64-windows fontconfig:x64-windows pkgconf:x64-windows libpng:x64-windows freetype:x64-windows harfbuzz:x64-windows pixman:x64-windows libffi:x64-windows pcre2:x64-windows zlib:x64-windows bzip2:x64-windows lzo:x64-windows
 
-      - name: Create or update nightly release and upload artifacts (workflow_dispatch)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # create or update a 'nightly' release and upload artifacts
-          if gh release view nightly --repo ${{ github.repository }} 2>/dev/null; then
-            gh release upload nightly ${{ github.workspace }}/release-artifacts/* --clobber --repo ${{ github.repository }}
-          else
-            gh release create nightly ${{ github.workspace }}/release-artifacts/* --title "Nightly" --notes "Nightly build" --repo ${{ github.repository }}
-          fi
+            - name: Install Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+
+            - name: Install meson and ninja (non-Windows)
+              if: matrix.runner != 'windows-latest'
+              run: python3 -m pip install --break-system-packages meson ninja PyMuPDF
+
+            - name: Install Rust toolchain
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  override: true
+
+            - name: Add target
+              run: rustup target add ${{ matrix.target }}
+
+            - name: Cargo fetch dependencies
+              shell: bash
+              run: |
+                  # Ensure cargo has fetched git checkouts so we can pre-build web assets
+                  cargo fetch --workspace --all-features
+
+            - name: Prebuild genpdfi_extended web helper (if present)
+              shell: bash
+              run: |
+                  base="$HOME/.cargo/git/checkouts"
+                  if [ -d "$base" ]; then
+                    pool=$(find "$base" -type d -name mermaid_pool | head -n1 )
+                    if [ -n "$pool" ]; then
+                      echo "Found mermaid_pool at $pool. Running npm ci && npm run build"
+                      npm --version 
+                      (cd "$pool" && npm ci && npm run build) 
+                    else
+                      echo "No mermaid_pool directory found under $base; will let cargo build-script run if necessary"
+                    fi
+                  else
+                    echo "Cargo git checkouts directory not present: $base"
+                  fi
+
+            - name: Build
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  cargo build --workspace --all-features --release --target ${{ matrix.target }}
+
+            - name: Package (non-Windows)
+              if: matrix.runner != 'windows-latest'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  mkdir -p dist
+                  BIN_DIR=target/${{ matrix.target }}/release
+                  # Copy known binaries if present
+                  for b in markdown2pdf inspect_pdf; do
+                    if [ -f "$BIN_DIR/$b" ]; then
+                      cp "$BIN_DIR/$b" "dist/${b}-${{ matrix.name }}"
+                    fi
+                  done
+                  # If nothing copied, show contents and fail
+                  if [ -z "$(ls -A dist )" ]; then
+                    echo "No binaries found in $BIN_DIR"
+                    ls -la "$BIN_DIR" 
+                    exit 1
+                  fi
+                  tar -C dist -czf dist/markdown2pdf-${{ matrix.name }}.tar.gz .
+
+            - name: Package (Windows)
+              if: matrix.runner == 'windows-latest'
+              shell: pwsh
+              run: |
+                  New-Item -ItemType Directory -Path dist | Out-Null
+                  $binDir = "target/${{ matrix.target }}/release"
+                  $found = $false
+                  foreach ($bin in @('markdown2pdf.exe','inspect_pdf.exe')) {
+                    $path = Join-Path $binDir $bin
+                    if (Test-Path $path) {
+                      Copy-Item $path -Destination "dist/$($bin.Replace('.exe',''))-${{ matrix.name }}.exe"
+                      $found = $true
+                    }
+                  }
+                  if (-not $found) { Write-Host "No windows binaries found:"; Get-ChildItem -Path $binDir -Recurse; exit 1 }
+                  Compress-Archive -Path "dist/*" -DestinationPath "dist/markdown2pdf-${{ matrix.name }}.zip"
+
+            - name: Upload build artifact
+              uses: actions/upload-artifact@v6
+              with:
+                  name: ${{ matrix.name }}
+                  path: dist/*
+
+    publish:
+        name: Create GitHub release
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@v5
+              with:
+                  path: dist
+
+            - name: Determine version and tag
+              id: ver
+              run: |
+                  set -e
+                  VERSION_LINE=$(grep '^version' Cargo.toml | head -n1 )
+                  if [ -z "$VERSION_LINE" ]; then echo "version not found in Cargo.toml"; exit 1; fi
+                  VERSION=$(echo "$VERSION_LINE" | sed -E 's/version = "([^"]+)"/\1/')
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="${VERSION}-nightly"; else TAG="${VERSION}"; fi
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "tag=$TAG" >> $GITHUB_OUTPUT
+                  echo "TAG=$TAG" >> $GITHUB_ENV
+
+            - name: Prepare release notes
+              run: |
+                  TAG=${{ env.TAG }}
+                  cat > release_notes.md <<EOF
+                  # markdown2pdf release $TAG
+
+                  This release provides prebuilt `markdown2pdf` executables for:
+                    - Ubuntu 24.04 (amd64 and arm64)
+                    - macOS (amd64 and arm64)
+                    - Windows (x86_64)
+
+                  ## Linux (Ubuntu 24.04)
+                  Install the runtime dependencies (example):
+
+                  ```bash
+                  sudo apt-get update && sudo apt-get install -y libpangocairo-1.0-0
+                  ```
+
+                  ## macOS (Homebrew)
+                  Install dependencies via Homebrew:
+
+                  ```bash
+                  brew install pango cairo fontconfig pkg-config
+                  ```
+
+                  If you use the **amd64** binary on an arm64 mac (Rosetta), you may need to install and use the x86_64 Homebrew and run with Rosetta: `arch -x86_64 <command>`.
+
+                  ## Windows (vcpkg / MSVC)
+                  Install dependencies using vcpkg and MSVC toolchain. Example steps:
+
+                  ```powershell
+                  git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+                  C:\vcpkg\bootstrap-vcpkg.bat
+                  C:\vcpkg\vcpkg.exe install cairo:x64-windows pango:x64-windows fontconfig:x64-windows pkgconf:x64-windows
+                  ```
+
+                  Note: the `mermaid` web helper is built at build time; Node.js is required for that build step. If you need prebuilt docs with mermaid assets, ensure Node is installed.
+
+                  EOF
+
+            - name: Create or update release and upload assets
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -e
+                  ls -lRa dist
+                  TAG=${{ env.TAG }}
+                  if ! gh release view "$TAG" >/dev/null 2>&1; then
+                    gh release create "$TAG" --title "markdown2pdf $TAG" --notes-file release_notes.md 
+                  fi
+                  ARCHIVES=$(find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print | paste -sd ' ' -)
+                  if [ -z "$ARCHIVES" ]; then
+                    echo "No archives found to upload"
+                  else
+                    echo "Uploading: $ARCHIVES"
+                    gh release upload "$TAG" $ARCHIVES --clobber
+                  fi
+
+            - name: Show release URL
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              shell: bash
+              run: |
+                  gh release view --json url --jq '.url' ${{ env.TAG }}
