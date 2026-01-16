@@ -199,6 +199,17 @@ jobs:
             # Optional debugging: list the genpdfi checkouts to help troubleshooting
             Get-ChildItem $base -Directory -Depth 2 | ForEach-Object { Write-Host "Checkout: $($_.FullName)" }
           }
+      - name: Cache vcpkg (Windows)
+        uses: actions/cache@v5
+        with:
+          path: |
+            C:/vcpkg/installed
+            C:/vcpkg/downloads
+            C:/vcpkg/packages
+          key: windows-vcpkg-amd64-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            windows-vcpkg-amd64-
+            windows-vcpkg-
       - name: Install vcpkg
         shell: bash
         run: |
