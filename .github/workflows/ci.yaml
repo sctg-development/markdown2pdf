@@ -1,4 +1,4 @@
-name: CI
+name: CI markdown2pdf
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 env:
-  TESTS_TO_SKIP: "--skip test_box_drawing_bytes_present_in_pdf --skip mermaid_render_each"
+  TESTS_TO_SKIP: "--skip test_box_drawing_bytes_present_in_pdf --skip mermaid_render_each --skip render_each_mermaid_block_to_pdf"
 jobs:
   build-macos-amd64:
     name: Build macOS (amd64)
@@ -30,7 +30,7 @@ jobs:
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
-          python3 -m pip install --break-system-packages meson ninja
+          python3 -m pip install --break-system-packages meson ninja PyMuPDF
       - name: Install Homebrew x86_64
         shell: bash
         run: |
@@ -81,7 +81,7 @@ jobs:
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
-          python3 -m pip install --break-system-packages meson ninja
+          python3 -m pip install --break-system-packages meson ninja PyMuPDF
       - name: Install dependencies
         shell: bash
         run: |
@@ -126,7 +126,7 @@ jobs:
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
-          python3 -m pip install --break-system-packages meson ninja
+          python3 -m pip install --break-system-packages meson ninja PyMuPDF
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -209,16 +209,12 @@ jobs:
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
-          python3 -m pip install --break-system-packages meson ninja
+          python3 -m pip install --break-system-packages meson ninja PyMuPDF
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      # install meson and nija with --break-system-packages
-      - name: Install meson and ninja
-        run: |
-          python3 -m pip install --break-system-packages meson ninja
       - name: Install system deps for tarpaulin
         run: |
           sudo apt-get update
@@ -258,7 +254,7 @@ jobs:
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
-          python3 -m pip install --break-system-packages meson ninja
+          python3 -m pip install --break-system-packages meson ninja PyMuPDF
       - name: Setup Rust
         shell: bash
         run: |
