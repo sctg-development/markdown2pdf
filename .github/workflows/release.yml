@@ -171,7 +171,8 @@ jobs:
                     ls -la "$BIN_DIR" 
                     exit 1
                   fi
-                  tar -C dist -czf dist/markdown2pdf-${{ matrix.name }}.tar.gz .
+                  tar -C dist -czf ../markdown2pdf-${{ matrix.name }}.tar.gz .
+                  mv ../markdown2pdf-${{ matrix.name }}.tar.gz dist/
 
             - name: Package (Windows)
               if: matrix.runner == 'windows-latest'
