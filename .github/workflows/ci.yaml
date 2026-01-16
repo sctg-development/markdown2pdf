@@ -175,7 +175,7 @@ jobs:
         shell: pwsh
         run: |
           # Ensure cargo has fetched git checkouts so we can pre-build web assets
-          cargo fetch --workspace --all-features
+          cargo fetch
       - name: Prebuild genpdfi_extended web helper
         shell: pwsh
         run: |
