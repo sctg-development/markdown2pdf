@@ -179,21 +179,25 @@ jobs:
       - name: Prebuild genpdfi_extended web helper
         shell: pwsh
         run: |
-          # Locate the genpdfi-extended checkout and run npm build in mermaid_pool if present
-          $p = Get-ChildItem "$env:USERPROFILE\.cargo\git\checkouts" -Directory -Recurse | Where-Object { $_.Name -like 'genpdfi-extended*' } | Select-Object -First 1
-          if ($p) {
-            Write-Host "Found $($p.FullName). Running npm ci && npm run build in mermaid_pool if present"
-            $pool = Join-Path $p.FullName 'mermaid_pool'
-            if (Test-Path $pool) {
-              Push-Location $pool
-              npm ci
-              npm run build
-              Pop-Location
-            } else {
-              Write-Host "mermaid_pool not found under $($p.FullName)"
-            }
+          # Search recursively for a 'mermaid_pool' directory in the git checkouts and build it if found
+          $base = Join-Path $env:USERPROFILE ".cargo\git\checkouts"
+          if (-not (Test-Path $base)) {
+            Write-Host "Cargo git checkouts directory not found: $base"
+            exit 0
+          }
+          Write-Host "Searching for mermaid_pool under $base"
+          $pool = Get-ChildItem $base -Directory -Recurse -Force | Where-Object { $_.Name -eq 'mermaid_pool' } | Select-Object -First 1
+          if ($pool) {
+            Write-Host "Found mermaid_pool at $($pool.FullName). Running npm ci && npm run build"
+            Push-Location $pool.FullName
+            npm --version
+            npm ci
+            npm run build
+            Pop-Location
           } else {
-            Write-Host "genpdfi_extended checkout not found, skipping prebuild"
+            Write-Host "No mermaid_pool directory found under $base; will let cargo build-script run if necessary"
+            # Optional debugging: list the genpdfi checkouts to help troubleshooting
+            Get-ChildItem $base -Directory -Depth 2 | ForEach-Object { Write-Host "Checkout: $($_.FullName)" }
           }
       - name: Install vcpkg
         shell: bash
