@@ -4,6 +4,7 @@
 
 [![Repository](https://img.shields.io/badge/repo-sctg--development%2Fmarkdown2pdf-green)](https://github.com/sctg-development/markdown2pdf)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![codecov](https://codecov.io/gh/sctg-development/markdown2pdf/graph/badge.svg?token=Nsq085WCxD)](https://codecov.io/gh/sctg-development/markdown2pdf)
 
 </p>
 
