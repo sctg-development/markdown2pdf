@@ -159,6 +159,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+        with:
+          node-version: "24"
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -203,6 +205,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # install meson and nija with --break-system-packages
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libpango1.0-dev libfontconfig1-dev pkg-config
       # install meson and nija with --break-system-packages
       - name: Install meson and ninja
         run: |
