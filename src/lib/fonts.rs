@@ -1,8 +1,8 @@
+use log::{debug, error, info, warn};
 use std::fs;
 use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::{debug, info, warn, error};
 
 use fontdb::Database;
 use genpdfi_extended::error::{Error, ErrorKind};
@@ -51,7 +51,8 @@ static SANS_BOLD_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-
 static MONO_SERIF_REGULAR: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Regular.ttf");
 static MONO_SERIF_BOLD: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Bold.ttf");
-static MONO_SERIF_ITALIC: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Italic.ttf");
+static MONO_SERIF_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/CMU Typewriter Text Italic.ttf");
 static MONO_SERIF_BOLD_ITALIC: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Bold Italic.ttf");
 /// Attempt to discover an embedded font family, mapping legacy names
@@ -82,27 +83,42 @@ fn find_embedded_family_and_name(name: &str) -> Option<(FontFamily<FontData>, &'
     let key = name.to_ascii_lowercase();
 
     // Map legacy and common PDF/base names to canonical embedded names first
-    let canonical = if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier") {
-        "CMU Typewriter Text"
-    } else if key.contains("noto") || key.contains("noto-sans") {
-        "DejaVu Sans"
-    } else if (key.contains("space") && key.contains("mono")) || key == "space-mono" || key == "spacemono" {
-        "DejaVu Sans Mono"
-    // Map common PDF base families to the embedded equivalents
-    } else if key.contains("helvetica") || key.contains("arial") || key.contains("sans") || key.contains("sans-serif") {
-        "DejaVu Sans"
-    } else if key.contains("times") || key.contains("timesnewroman") || key.contains("times new roman") || key.contains("serif") {
-        "DejaVu Serif"
-    } else {
-        // Try to match explicit canonical names provided by embedded_fonts
-        for k in crate::embedded_fonts::known_embedded_families() {
-            if name.to_ascii_lowercase().contains(&k.to_ascii_lowercase()) || k.to_ascii_lowercase().contains(&name.to_ascii_lowercase()) {
-                return crate::embedded_fonts::try_embedded_font_family(k).map(|f| (f, k));
+    let canonical =
+        if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier")
+        {
+            "CMU Typewriter Text"
+        } else if key.contains("noto") || key.contains("noto-sans") {
+            "DejaVu Sans"
+        } else if (key.contains("space") && key.contains("mono"))
+            || key == "space-mono"
+            || key == "spacemono"
+        {
+            "DejaVu Sans Mono"
+        // Map common PDF base families to the embedded equivalents
+        } else if key.contains("helvetica")
+            || key.contains("arial")
+            || key.contains("sans")
+            || key.contains("sans-serif")
+        {
+            "DejaVu Sans"
+        } else if key.contains("times")
+            || key.contains("timesnewroman")
+            || key.contains("times new roman")
+            || key.contains("serif")
+        {
+            "DejaVu Serif"
+        } else {
+            // Try to match explicit canonical names provided by embedded_fonts
+            for k in crate::embedded_fonts::known_embedded_families() {
+                if name.to_ascii_lowercase().contains(&k.to_ascii_lowercase())
+                    || k.to_ascii_lowercase().contains(&name.to_ascii_lowercase())
+                {
+                    return crate::embedded_fonts::try_embedded_font_family(k).map(|f| (f, k));
+                }
             }
-        }
-        // No match
-        return None;
-    };
+            // No match
+            return None;
+        };
 
     crate::embedded_fonts::try_embedded_font_family(canonical).map(|f| (f, canonical))
 }
@@ -162,10 +178,7 @@ mod tests {
             "Embedded DejaVuSans family should be available"
         );
         let family = family.unwrap();
-        assert_eq!(
-            family.regular.get_data().unwrap().len(),
-            SANS_REGULAR.len()
-        );
+        assert_eq!(family.regular.get_data().unwrap().len(), SANS_REGULAR.len());
     }
 
     #[test]
@@ -198,7 +211,8 @@ mod tests {
             assert_eq!(canon, "DejaVu Serif");
             assert_eq!(family.regular.get_data().unwrap().len(), {
                 // Use embedded helper directly to get expected size
-                let expected = crate::embedded_fonts::try_embedded_font_family("DejaVu Serif").unwrap();
+                let expected =
+                    crate::embedded_fonts::try_embedded_font_family("DejaVu Serif").unwrap();
                 expected.regular.get_data().unwrap().len()
             });
         } else {
@@ -210,7 +224,10 @@ mod tests {
     fn test_embedded_courier_maps_to_cmu_typewriter() {
         if let Some((family, canon)) = find_embedded_family_and_name("Courier") {
             assert_eq!(canon, "CMU Typewriter Text");
-            assert_eq!(family.regular.get_data().unwrap().len(), MONO_SERIF_REGULAR.len());
+            assert_eq!(
+                family.regular.get_data().unwrap().len(),
+                MONO_SERIF_REGULAR.len()
+            );
         } else {
             panic!("Courier should map to an embedded CMU Typewriter family");
         }
@@ -504,8 +521,9 @@ pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>
                         // Regular .ttf/.otf file
                         // Prefer `try_from_bytes` which returns an Option; keep `catch_unwind` as
                         // an extra safety in case of unexpected panics from font parsing.
-                        let is_valid = panic::catch_unwind(|| Font::try_from_vec(b.clone()).is_some())
-                            .unwrap_or(false);
+                        let is_valid =
+                            panic::catch_unwind(|| Font::try_from_vec(b.clone()).is_some())
+                                .unwrap_or(false);
 
                         if is_valid {
                             selected_bytes = Some(b);
@@ -527,8 +545,8 @@ pub fn load_system_font_family_simple(name: &str) -> Result<FontFamily<FontData>
             // Double-check the font is valid before creating FontData
             // This prevents panics from invalid .ttc extractions
             // Prefer `try_from_bytes` and keep `catch_unwind` as an extra safety.
-            let is_valid =
-                panic::catch_unwind(|| Font::try_from_vec(bytes.clone()).is_some()).unwrap_or(false);
+            let is_valid = panic::catch_unwind(|| Font::try_from_vec(bytes.clone()).is_some())
+                .unwrap_or(false);
 
             if !is_valid {
                 eprintln!("  ⚠ Font data invalid, skipping '{}'", candidate_name);
@@ -661,7 +679,12 @@ fn find_font_variant_in_paths(
         let base_no_space = base_raw.replace(" ", "");
         let base_dash = base_raw.replace(" ", "-");
         let base_underscore = base_raw.replace(" ", "_");
-        let bases = vec![base_raw.as_str(), base_no_space.as_str(), base_dash.as_str(), base_underscore.as_str()];
+        let bases = vec![
+            base_raw.as_str(),
+            base_no_space.as_str(),
+            base_dash.as_str(),
+            base_underscore.as_str(),
+        ];
 
         for custom_path in custom_paths {
             if !custom_path.is_dir() {
@@ -838,7 +861,10 @@ pub fn load_font_with_config(
     // Embedded fonts are shipped with the project and are considered safe – skip
     // subsetting for embedded fonts to avoid producing invalid font binaries.
     if let Some((family, canon)) = find_embedded_family_and_name(name) {
-        eprintln!("✓ Using embedded font family '{}' (load_font_with_config)", canon);
+        eprintln!(
+            "✓ Using embedded font family '{}' (load_font_with_config)",
+            canon
+        );
         return Ok(family);
     }
 
@@ -1175,6 +1201,90 @@ pub fn load_unicode_system_font(text: Option<&str>) -> Result<FontFamily<FontDat
     eprintln!("     • brew install font-noto-sans  (Homebrew)");
     eprintln!("     • Or download from https://fonts.google.com/noto");
     load_builtin_font_family("helvetica")
+}
+
+/// Returns a list of missing characters for a given `FontFamily<FontData>` and text
+pub fn missing_glyphs_for_family(
+    family: &FontFamily<FontData>,
+    text: &str,
+) -> Result<Vec<char>, Error> {
+    use std::collections::HashSet;
+    // Get raw bytes for the regular font variant
+    let data = family.regular.get_data()?;
+    // Try to construct a rusttype Font from the bytes
+    let font = Font::try_from_vec(data.to_vec()).ok_or_else(|| {
+        Error::new(
+            "Failed to parse font data into rusttype::Font".to_string(),
+            ErrorKind::InvalidFont,
+        )
+    })?;
+
+    let mut missing = Vec::new();
+    let mut seen = HashSet::new();
+    for ch in text.chars().filter(|c| !c.is_whitespace()) {
+        if seen.contains(&ch) {
+            continue;
+        }
+        seen.insert(ch);
+        // rusttype::Font::glyph returns a Glyph; check its id
+        let glyph = font.glyph(ch);
+        let gid = glyph.id().0;
+        if gid == 0 {
+            missing.push(ch);
+        }
+    }
+    Ok(missing)
+}
+
+/// Best-effort report: for a set of fonts (from config or defaults) returns a vector of (font_name, missing_chars)
+pub fn report_missing_glyphs(
+    text: &str,
+    config: Option<&FontConfig>,
+) -> Result<Vec<(String, Vec<char>)>, Error> {
+    let mut result = Vec::new();
+
+    // Build list of fonts to check
+    let mut fonts_to_check: Vec<String> = Vec::new();
+    if let Some(cfg) = config {
+        if let Some(df) = &cfg.default_font {
+            fonts_to_check.push(df.clone());
+        }
+        for fb in &cfg.fallback_fonts {
+            fonts_to_check.push(fb.clone());
+        }
+    }
+
+    // If none specified, check a short default list
+    if fonts_to_check.is_empty() {
+        fonts_to_check = vec![
+            "DejaVu Sans".to_string(),
+            "Noto Sans".to_string(),
+            "Helvetica".to_string(),
+        ];
+    }
+
+    for fname in fonts_to_check {
+        // Try embedded first
+        if let Some((family, canon)) = find_embedded_family_and_name(&fname) {
+            let missing = missing_glyphs_for_family(&family, text)?;
+            result.push((canon.to_string(), missing));
+            continue;
+        }
+
+        // Try system font
+        match load_system_font_family_simple(&fname) {
+            Ok(family) => {
+                let missing = missing_glyphs_for_family(&family, text)?;
+                result.push((fname.clone(), missing));
+            }
+            Err(_) => {
+                // Could not load font; skip but include an empty result to indicate missing font
+                result.push((fname.clone(), Vec::new()));
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 /// Extracts primary fonts from a fallback chain family.
@@ -1535,7 +1645,8 @@ mod fonts_integration_tests {
     #[test]
     fn test_find_font_variant_in_paths_finds_variants() {
         let fonts = fonts_dir();
-        let regular = find_font_variant_in_paths("DejaVuSans", FontVariant::Regular, &[fonts.clone()]);
+        let regular =
+            find_font_variant_in_paths("DejaVuSans", FontVariant::Regular, &[fonts.clone()]);
         assert!(regular.is_some());
         let bold = find_font_variant_in_paths("DejaVuSans", FontVariant::Bold, &[fonts.clone()]);
         assert!(bold.is_some());
@@ -1613,7 +1724,8 @@ mod fonts_integration_tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let found = find_font_variant_in_paths("DefinitelyNotAFont", FontVariant::Regular, &[tmp.clone()]);
+        let found =
+            find_font_variant_in_paths("DefinitelyNotAFont", FontVariant::Regular, &[tmp.clone()]);
         assert!(found.is_none());
 
         let _ = std::fs::remove_dir_all(&tmp);
@@ -1653,7 +1765,10 @@ mod fonts_integration_tests {
         let fam = load_font_with_config("NonExistentPrimary", Some(&cfg), Some("Hello world"));
         if let Err(e) = &fam {
             // Subsetting or loading can fail in some environments; ensure error is informative
-            eprintln!("load_font_with_config returned error (acceptable in some envs): {}", e);
+            eprintln!(
+                "load_font_with_config returned error (acceptable in some envs): {}",
+                e
+            );
         }
         assert!(fam.is_ok() || fam.is_err());
     }
@@ -1680,6 +1795,25 @@ mod fonts_integration_tests {
                 // Subsetting may fail on some environments; accept an Err but log it
                 eprintln!("Subsetting failed in this environment (acceptable): {}", e);
             }
+        }
+    }
+
+    #[test]
+    fn test_missing_glyphs_for_family_detects_missing_and_present() {
+        // Use embedded DejaVu Sans (should exist in repo fonts/) and test
+        if let Some((family, _)) = find_embedded_family_and_name("DejaVu Sans") {
+            // ASCII text should be fully covered
+            let missing_ascii = missing_glyphs_for_family(&family, "Hello World").unwrap();
+            assert!(missing_ascii.is_empty());
+
+            // Use a very high codepoint unlikely to be present
+            let high_char = '\u{10FFFF}';
+            let s = missing_glyphs_for_family(&family, &high_char.to_string()).unwrap();
+            assert!(!s.is_empty());
+            assert!(s.contains(&high_char));
+        } else {
+            // If embedded font not present in this environment, skip test
+            eprintln!("Embedded DejaVu Sans not available in this environment; skipping missing glyphs test");
         }
     }
 }

@@ -215,6 +215,43 @@ fn run(matches: clap::ArgMatches) -> Result<(), AppError> {
         }
     }
 
+    // Show missing glyphs if requested (best-effort)
+    if matches.get_flag("show-missing-glyphs") {
+        match markdown2pdf::fonts::report_missing_glyphs(&markdown, font_config.as_ref()) {
+            Ok(results) => {
+                println!("🔎 Missing glyphs report:");
+                for (font_name, missing) in results {
+                    if missing.is_empty() {
+                        println!("  • {}: complete coverage", font_name);
+                    } else {
+                        let s = missing
+                            .iter()
+                            .map(|c| {
+                                let hex = format!("U+{:04X}", *c as u32);
+                                let ch = if c.is_control() {
+                                    format!("{:?}", c)
+                                } else {
+                                    c.to_string()
+                                };
+                                format!("{} ({})", hex, ch)
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        println!(
+                            "  • {}: missing {} glyph(s): {}",
+                            font_name,
+                            missing.len(),
+                            s
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Could not compute missing glyphs: {}", e);
+            }
+        }
+    }
+
     // Generate PDF
     if verbosity == Verbosity::Verbose {
         info!("📄 Generating PDF...");
@@ -376,6 +413,14 @@ fn main() {
         }
 
         #[test]
+        fn test_show_missing_glyphs_flag() {
+            let cmd = Command::new("test")
+                .arg(Arg::new("show-missing-glyphs").long("show-missing-glyphs"));
+            let matches = cmd.get_matches_from(vec!["test", "--show-missing-glyphs"]);
+            assert!(matches.get_flag("show-missing-glyphs"));
+        }
+
+        #[test]
         fn test_run_dry_run_returns_ok() {
             let tmp = env::temp_dir().join("md_test_run.md");
             fs::write(&tmp, "# Small").unwrap();
@@ -532,6 +577,12 @@ fn main() {
             Arg::new("get-default-configuration")
                 .long("get-default-configuration")
                 .help("Print a default markdown2pdfrc.toml to stdout and exit")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("show-missing-glyphs")
+                .long("show-missing-glyphs")
+                .help("List missing glyphs detected by font coverage checks before generating PDF")
                 .action(clap::ArgAction::SetTrue),
         );
 
