@@ -26,6 +26,10 @@ path = "src/lib/lib.rs"
 name = "markdown2pdf"
 path = "src/bin/main.rs"
 
+[[bin]]
+name = "extend_font"
+path = "src/bin/extend_font.rs"
+
 [features]
 default = ["fetch", "rustls-tls", "latex", "mermaid"]
 fetch = ["dep:reqwest"]
@@ -64,6 +68,9 @@ reqwest = { version = "0.13.1", features = [
     "http2",
 ], default-features = false, optional = true }
 fontdb = "0.23.0"
+write-fonts = "0.45.0"
+read-fonts = "0.37.0"
+skrifa = "0.40.0"
 
 lopdf = "0.39.0"
 rusttype = "0.9.3"

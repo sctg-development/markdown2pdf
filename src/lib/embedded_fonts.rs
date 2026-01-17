@@ -53,7 +53,7 @@ pub fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     }
 
     // CMU Typewriter (monospace serif-ish)
-    if l.contains("cmu") || l.contains("typewriter") {
+    if l.contains("cmu") || l.contains("typewriter") || l.contains("courier") {
         return family_from_embedded(
             MONO_SERIF_REGULAR,
             MONO_SERIF_BOLD,
@@ -76,11 +76,11 @@ pub fn known_embedded_families() -> Vec<&'static str> {
 }
 
 #[test]
-fn test_embedded_space_mono_available() {
-    let family = try_embedded_font_family("space-mono");
+fn test_embedded_dejavu_mono_available() {
+    let family = try_embedded_font_family("dejavu-mono");
     assert!(
         family.is_some(),
-        "Embedded SpaceMono family should be available"
+        "Embedded DejaVu Mono family should be available"
     );
     let family = family.unwrap();
     assert_eq!(
@@ -90,19 +90,19 @@ fn test_embedded_space_mono_available() {
 }
 
 #[test]
-fn test_embedded_noto_sans_available() {
-    let family = try_embedded_font_family("noto-sans");
+fn test_embedded_dejavu_sans_available() {
+    let family = try_embedded_font_family("dejavu-sans");
     assert!(
         family.is_some(),
-        "Embedded DejaVuSans family should be available"
+        "Embedded DejaVu Sans family should be available"
     );
     let family = family.unwrap();
     assert_eq!(family.regular.get_data().unwrap().len(), SANS_REGULAR.len());
 }
 
 #[test]
-fn test_embedded_courier_prime_available() {
-    let family = try_embedded_font_family("courier-prime");
+fn test_embedded_courier_available() {
+    let family = try_embedded_font_family("courier");
     assert!(
         family.is_some(),
         "Embedded CMU Typewriter family should be available"
