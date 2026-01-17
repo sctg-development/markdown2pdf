@@ -34,52 +34,37 @@ fn get_font_aliases(name: &str) -> Vec<&'static str> {
 // These are prioritized over system fonts when available.
 // -----------------------------------------------------------------------------
 
-// Emoji - Noto Color Emoji
-static EMOJI_NOTO_COLOR: &'static [u8] = include_bytes!("../../fonts/NotoColorEmoji-Regular.ttf");
-
 // Monospace (fixed-width) - DejaVu Sans Mono
-static MONO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono.ttf");
-static MONO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Bold.ttf");
-static MONO_SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Oblique.ttf");
-static MONO_SANS_BOLD_ITALIC: &'static [u8] =
+pub static MONO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono.ttf");
+pub static MONO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Bold.ttf");
+pub static MONO_SANS_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/DejaVuSansMono-Oblique.ttf");
+pub static MONO_SANS_BOLD_ITALIC: &'static [u8] =
     include_bytes!("../../fonts/DejaVuSansMono-BoldOblique.ttf");
 
 // Sans-serif - DejaVu Sans
-static SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
-static SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Bold.ttf");
-static SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Oblique.ttf");
-static SANS_BOLD_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-BoldOblique.ttf");
+pub static SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
+pub static SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Bold.ttf");
+pub static SANS_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSans-Oblique.ttf");
+pub static SANS_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/DejaVuSans-BoldOblique.ttf");
 
-// Monospace alternative - CMU Typewriter (also included)
-static MONO_SERIF_REGULAR: &'static [u8] =
+// Serif - DejaVu Serif
+pub static SERIF_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSerif.ttf");
+pub static SERIF_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSerif-Bold.ttf");
+pub static SERIF_ITALIC: &'static [u8] = include_bytes!("../../fonts/DejaVuSerif-Italic.ttf");
+pub static SERIF_BOLD_ITALIC: &'static [u8] =
+    include_bytes!("../../fonts/DejaVuSerif-BoldItalic.ttf");
+
+// Monospace alternative - CMU Typewriter
+pub static MONO_SERIF_REGULAR: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Regular.ttf");
-static MONO_SERIF_BOLD: &'static [u8] = include_bytes!("../../fonts/CMU Typewriter Text Bold.ttf");
-static MONO_SERIF_ITALIC: &'static [u8] =
+pub static MONO_SERIF_BOLD: &'static [u8] =
+    include_bytes!("../../fonts/CMU Typewriter Text Bold.ttf");
+pub static MONO_SERIF_ITALIC: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Italic.ttf");
-static MONO_SERIF_BOLD_ITALIC: &'static [u8] =
+pub static MONO_SERIF_BOLD_ITALIC: &'static [u8] =
     include_bytes!("../../fonts/CMU Typewriter Text Bold Italic.ttf");
-/// Attempt to discover an embedded font family, mapping legacy names
-/// such as "CourierPrime", "Noto Sans" and "space-mono" to the canonical
-/// embedded families implemented in `embedded_fonts.rs`.
-fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
-    let key = name.to_ascii_lowercase();
-
-    // Map common legacy names to the canonical embedded family names
-    if key.contains("courierprime") || key.contains("courier-prime") || key.contains("courier") {
-        return crate::embedded_fonts::try_embedded_font_family("CMU Typewriter Text");
-    }
-
-    if key.contains("noto") || key.contains("noto-sans") {
-        return crate::embedded_fonts::try_embedded_font_family("DejaVu Sans");
-    }
-
-    if key.contains("space") && key.contains("mono") || key == "space-mono" || key == "spacemono" {
-        return crate::embedded_fonts::try_embedded_font_family("DejaVu Sans Mono");
-    }
-
-    // Allow passing canonical/explicit names directly to the embedded helper
-    crate::embedded_fonts::try_embedded_font_family(name)
-}
 
 /// Find an embedded family and return it along with the canonical family name
 fn find_embedded_family_and_name(name: &str) -> Option<(FontFamily<FontData>, &'static str)> {
@@ -1818,77 +1803,5 @@ mod fonts_integration_tests {
             // If embedded font not present in this environment, skip test
             eprintln!("Embedded DejaVu Sans not available in this environment; skipping missing glyphs test");
         }
-    }
-
-    #[test]
-    //#[ignore = "Manual: checks COLR/CPAL or CBDT/CBLC presence and rusttype glyph mapping for Noto Color Emoji"]
-    fn test_noto_color_emoji_color_tables_and_rusttype_support() {
-        // Access embedded emoji bytes
-        let bytes: &'static [u8] = EMOJI_NOTO_COLOR;
-
-        // Quick SFNT table directory scan to detect presence of specific tables
-        fn has_table(bytes: &[u8], tag: &str) -> bool {
-            if bytes.len() < 12 || tag.len() != 4 {
-                return false;
-            }
-            let num_tables = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
-            for i in 0..num_tables {
-                let base = 12 + i * 16;
-                if base + 4 <= bytes.len() {
-                    if &bytes[base..base + 4] == tag.as_bytes() {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-
-        let has_colr = has_table(bytes, "COLR");
-        let has_cpal = has_table(bytes, "CPAL");
-        let has_cbdt = has_table(bytes, "CBDT");
-        let has_cblc = has_table(bytes, "CBLC");
-
-        eprintln!(
-            "NotoColorEmoji tables: COLR={}, CPAL={}, CBDT={}, CBLC={}",
-            has_colr, has_cpal, has_cbdt, has_cblc
-        );
-
-        // Noto Color Emoji should include either COLR+CPAL (vector color) or CBDT+CBLC (bitmap)
-        assert!(
-            (has_colr && has_cpal) || (has_cbdt && has_cblc),
-            "NotoColorEmoji should contain COLR+CPAL or CBDT+CBLC tables"
-        );
-
-        // Attempt to parse with rusttype
-        let font_parse = panic::catch_unwind(|| Font::try_from_vec(bytes.to_vec()));
-        assert!(font_parse.is_ok(), "rusttype::Font::try_from_vec panicked");
-        let font_opt = font_parse.unwrap();
-        let font = font_opt.expect("rusttype failed to parse NotoColorEmoji");
-
-        // Sample emoji/chars to test mapping
-        let sample = [
-            '\u{1F527}',
-            '\u{1F980}',
-            '\u{1F310}',
-            '\u{2705}',
-            '\u{4E2D}',
-            '\u{6587}',
-            '\u{23F3}',
-            '\u{274C}',
-        ];
-        let mut mapped = 0usize;
-        for ch in sample.iter() {
-            let gid = font.glyph(*ch).id().0;
-            eprintln!("char {} U+{:X} -> gid {}", ch, *ch as u32, gid);
-            if gid != 0 {
-                mapped += 1;
-            }
-        }
-
-        // If rusttype maps at least one emoji to a glyph ID, it can address glyph coverage; color rendering support is a separate concern
-        assert!(
-            mapped > 0,
-            "rusttype could not map any sample emoji glyphs (mapped=0)"
-        );
     }
 }

@@ -1,5 +1,11 @@
 use genpdfi_extended::fonts::{FontData, FontFamily};
 
+use crate::fonts::{
+    MONO_SANS_BOLD, MONO_SANS_BOLD_ITALIC, MONO_SANS_ITALIC, MONO_SANS_REGULAR, MONO_SERIF_BOLD,
+    MONO_SERIF_BOLD_ITALIC, MONO_SERIF_ITALIC, MONO_SERIF_REGULAR, SANS_BOLD, SANS_BOLD_ITALIC,
+    SANS_ITALIC, SANS_REGULAR, SERIF_BOLD, SERIF_BOLD_ITALIC, SERIF_ITALIC, SERIF_REGULAR,
+};
+
 /// Try to construct an embedded `FontFamily<FontData>` from bundled TTF bytes.
 /// Returns `Some(family)` on success, `None` on failure.
 fn family_from_embedded(
@@ -29,85 +35,30 @@ pub fn try_embedded_font_family(name: &str) -> Option<FontFamily<FontData>> {
     // DejaVu Sans Mono (monospace)
     if l.contains("dejavu") && l.contains("mono") {
         return family_from_embedded(
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSansMono.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSansMono-Bold.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSansMono-Oblique.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSansMono-BoldOblique.ttf"
-            )),
+            MONO_SANS_REGULAR,
+            MONO_SANS_BOLD,
+            MONO_SANS_ITALIC,
+            MONO_SANS_BOLD_ITALIC,
         );
     }
 
     // DejaVu Sans (sans serif)
     if l.contains("dejavu") && l.contains("sans") {
-        return family_from_embedded(
-            include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/DejaVuSans.ttf")),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSans-Bold.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSans-Oblique.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSans-BoldOblique.ttf"
-            )),
-        );
+        return family_from_embedded(SANS_REGULAR, SANS_BOLD, SANS_ITALIC, SANS_BOLD_ITALIC);
     }
 
     // DejaVu Serif
     if l.contains("dejavu") && l.contains("serif") {
-        return family_from_embedded(
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSerif.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSerif-Bold.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSerif-Italic.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/DejaVuSerif-BoldItalic.ttf"
-            )),
-        );
+        return family_from_embedded(SERIF_REGULAR, SERIF_BOLD, SERIF_ITALIC, SERIF_BOLD_ITALIC);
     }
 
     // CMU Typewriter (monospace serif-ish)
     if l.contains("cmu") || l.contains("typewriter") {
         return family_from_embedded(
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/CMU Typewriter Text Regular.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/CMU Typewriter Text Bold.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/CMU Typewriter Text Italic.ttf"
-            )),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/fonts/CMU Typewriter Text Bold Italic.ttf"
-            )),
+            MONO_SERIF_REGULAR,
+            MONO_SERIF_BOLD,
+            MONO_SERIF_ITALIC,
+            MONO_SERIF_BOLD_ITALIC,
         );
     }
 
