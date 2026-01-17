@@ -34,6 +34,9 @@ fn get_font_aliases(name: &str) -> Vec<&'static str> {
 // These are prioritized over system fonts when available.
 // -----------------------------------------------------------------------------
 
+// Emoji - Noto Color Emoji
+static EMOJI_NOTO_COLOR: &'static [u8] = include_bytes!("../../fonts/NotoColorEmoji-Regular.ttf");
+
 // Monospace (fixed-width) - DejaVu Sans Mono
 static MONO_SANS_REGULAR: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono.ttf");
 static MONO_SANS_BOLD: &'static [u8] = include_bytes!("../../fonts/DejaVuSansMono-Bold.ttf");
@@ -1815,5 +1818,77 @@ mod fonts_integration_tests {
             // If embedded font not present in this environment, skip test
             eprintln!("Embedded DejaVu Sans not available in this environment; skipping missing glyphs test");
         }
+    }
+
+    #[test]
+    //#[ignore = "Manual: checks COLR/CPAL or CBDT/CBLC presence and rusttype glyph mapping for Noto Color Emoji"]
+    fn test_noto_color_emoji_color_tables_and_rusttype_support() {
+        // Access embedded emoji bytes
+        let bytes: &'static [u8] = EMOJI_NOTO_COLOR;
+
+        // Quick SFNT table directory scan to detect presence of specific tables
+        fn has_table(bytes: &[u8], tag: &str) -> bool {
+            if bytes.len() < 12 || tag.len() != 4 {
+                return false;
+            }
+            let num_tables = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+            for i in 0..num_tables {
+                let base = 12 + i * 16;
+                if base + 4 <= bytes.len() {
+                    if &bytes[base..base + 4] == tag.as_bytes() {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+
+        let has_colr = has_table(bytes, "COLR");
+        let has_cpal = has_table(bytes, "CPAL");
+        let has_cbdt = has_table(bytes, "CBDT");
+        let has_cblc = has_table(bytes, "CBLC");
+
+        eprintln!(
+            "NotoColorEmoji tables: COLR={}, CPAL={}, CBDT={}, CBLC={}",
+            has_colr, has_cpal, has_cbdt, has_cblc
+        );
+
+        // Noto Color Emoji should include either COLR+CPAL (vector color) or CBDT+CBLC (bitmap)
+        assert!(
+            (has_colr && has_cpal) || (has_cbdt && has_cblc),
+            "NotoColorEmoji should contain COLR+CPAL or CBDT+CBLC tables"
+        );
+
+        // Attempt to parse with rusttype
+        let font_parse = panic::catch_unwind(|| Font::try_from_vec(bytes.to_vec()));
+        assert!(font_parse.is_ok(), "rusttype::Font::try_from_vec panicked");
+        let font_opt = font_parse.unwrap();
+        let font = font_opt.expect("rusttype failed to parse NotoColorEmoji");
+
+        // Sample emoji/chars to test mapping
+        let sample = [
+            '\u{1F527}',
+            '\u{1F980}',
+            '\u{1F310}',
+            '\u{2705}',
+            '\u{4E2D}',
+            '\u{6587}',
+            '\u{23F3}',
+            '\u{274C}',
+        ];
+        let mut mapped = 0usize;
+        for ch in sample.iter() {
+            let gid = font.glyph(*ch).id().0;
+            eprintln!("char {} U+{:X} -> gid {}", ch, *ch as u32, gid);
+            if gid != 0 {
+                mapped += 1;
+            }
+        }
+
+        // If rusttype maps at least one emoji to a glyph ID, it can address glyph coverage; color rendering support is a separate concern
+        assert!(
+            mapped > 0,
+            "rusttype could not map any sample emoji glyphs (mapped=0)"
+        );
     }
 }
