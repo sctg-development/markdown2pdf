@@ -79,10 +79,14 @@ jobs:
               if: matrix.runner == 'macos-latest' || matrix.runner == 'macos-15-intel'
               shell: bash
               run: |
-                  if [ -x /opt/homebrew/bin/brew ]; then
+                  if command -v brew >/dev/null 2>&1; then
+                    if [ -x /opt/homebrew/bin/brew ]; then
                         echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" >> $GITHUB_ENV
-                  elif
+                    else
                         echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> $GITHUB_ENV
+                    fi
+                  else
+                    echo "warning: brew not found; PKG_CONFIG_PATH not set" >&2
                   fi
                   brew install cairo pango fontconfig pkg-config lzo libffi zlib bzip2 graphite2 libpng freetype harfbuzz pixman pcre2
                   # Verify pango
