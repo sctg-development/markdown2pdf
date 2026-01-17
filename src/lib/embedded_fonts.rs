@@ -74,3 +74,42 @@ pub fn known_embedded_families() -> Vec<&'static str> {
         "CMU Typewriter Text",
     ]
 }
+
+#[test]
+fn test_embedded_space_mono_available() {
+    let family = try_embedded_font_family("space-mono");
+    assert!(
+        family.is_some(),
+        "Embedded SpaceMono family should be available"
+    );
+    let family = family.unwrap();
+    assert_eq!(
+        family.regular.get_data().unwrap().len(),
+        MONO_SANS_REGULAR.len()
+    );
+}
+
+#[test]
+fn test_embedded_noto_sans_available() {
+    let family = try_embedded_font_family("noto-sans");
+    assert!(
+        family.is_some(),
+        "Embedded DejaVuSans family should be available"
+    );
+    let family = family.unwrap();
+    assert_eq!(family.regular.get_data().unwrap().len(), SANS_REGULAR.len());
+}
+
+#[test]
+fn test_embedded_courier_prime_available() {
+    let family = try_embedded_font_family("courier-prime");
+    assert!(
+        family.is_some(),
+        "Embedded CMU Typewriter family should be available"
+    );
+    let family = family.unwrap();
+    assert_eq!(
+        family.regular.get_data().unwrap().len(),
+        MONO_SERIF_REGULAR.len()
+    );
+}

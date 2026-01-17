@@ -145,45 +145,6 @@ mod tests {
     }
 
     #[test]
-    fn test_embedded_space_mono_available() {
-        let family = try_embedded_font_family("space-mono");
-        assert!(
-            family.is_some(),
-            "Embedded SpaceMono family should be available"
-        );
-        let family = family.unwrap();
-        assert_eq!(
-            family.regular.get_data().unwrap().len(),
-            MONO_SANS_REGULAR.len()
-        );
-    }
-
-    #[test]
-    fn test_embedded_noto_sans_available() {
-        let family = try_embedded_font_family("noto-sans");
-        assert!(
-            family.is_some(),
-            "Embedded DejaVuSans family should be available"
-        );
-        let family = family.unwrap();
-        assert_eq!(family.regular.get_data().unwrap().len(), SANS_REGULAR.len());
-    }
-
-    #[test]
-    fn test_embedded_courier_prime_available() {
-        let family = try_embedded_font_family("courier-prime");
-        assert!(
-            family.is_some(),
-            "Embedded CMU Typewriter family should be available"
-        );
-        let family = family.unwrap();
-        assert_eq!(
-            family.regular.get_data().unwrap().len(),
-            MONO_SERIF_REGULAR.len()
-        );
-    }
-
-    #[test]
     fn test_embedded_helvetica_maps_to_dejavu_sans() {
         if let Some((family, canon)) = find_embedded_family_and_name("Helvetica") {
             assert_eq!(canon, "DejaVu Sans");
@@ -1801,7 +1762,9 @@ mod fonts_integration_tests {
             assert!(s.contains(&high_char));
         } else {
             // If embedded font not present in this environment, skip test
-            eprintln!("Embedded DejaVu Sans not available in this environment; skipping missing glyphs test");
+            eprintln!(
+                "Embedded DejaVu Sans not available in this environment; skipping missing glyphs test"
+            );
         }
     }
 }
