@@ -28,7 +28,7 @@ path = "src/bin/main.rs"
 
 [[bin]]
 name = "extend_font"
-path = "src/bin/extend_font.rs"
+path = "src/bin/extend_font/main.rs"
 
 [features]
 default = ["fetch", "rustls-tls", "latex", "mermaid"]
@@ -71,6 +71,8 @@ fontdb = "0.23.0"
 write-fonts = "0.45.0"
 read-fonts = "0.37.0"
 skrifa = "0.40.0"
+allsorts = { version = "0.16.1", features = ["flate2_rust"] }
+byteorder = "1.5"
 
 lopdf = "0.39.0"
 rusttype = "0.9.3"

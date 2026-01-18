@@ -18,20 +18,25 @@ use log::{debug, error, info};
 use std::fs;
 use std::process;
 
-mod extend_font {
-    pub mod args;
-    pub mod font_utils;
-    pub mod glyph_copier;
-    pub mod logging;
-}
+mod args;
+mod cmap_builder;
+mod font_subsetter;
+mod font_utils;
+mod glyph_copier;
+mod glyph_copier_impl;
+mod glyf_binary_merger;
+mod logging;
 
-use extend_font::{args, font_utils, glyph_copier, logging};
+use args::ExtendFontArgs;
+use font_utils::FontInfo;
+use glyph_copier::copy_missing_glyphs;
+use logging::init_logging;
 
 fn main() {
-    let args = args::ExtendFontArgs::parse();
+    let args = ExtendFontArgs::parse();
 
     // Initialize logging based on CLI arguments and RUST_LOG environment variable
-    if let Err(e) = logging::init_logging(&args) {
+    if let Err(e) = init_logging(&args) {
         eprintln!("Failed to initialize logging: {}", e);
         process::exit(1);
     }
@@ -48,11 +53,11 @@ fn main() {
 }
 
 /// Main entry point for font extension logic
-fn run(args: &args::ExtendFontArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn run(args: &ExtendFontArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Read source font
     debug!("Reading source font from: {:?}", args.src_font);
     let src_font_data = fs::read(&args.src_font)?;
-    let src_font = font_utils::FontInfo::from_bytes(&src_font_data)?;
+    let src_font = FontInfo::from_bytes(&src_font_data)?;
     info!(
         "Source font '{}' loaded with {} glyphs",
         src_font.name(),
@@ -62,7 +67,7 @@ fn run(args: &args::ExtendFontArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Read combine font
     debug!("Reading combine font from: {:?}", args.combine_font);
     let combine_font_data = fs::read(&args.combine_font)?;
-    let combine_font = font_utils::FontInfo::from_bytes(&combine_font_data)?;
+    let combine_font = FontInfo::from_bytes(&combine_font_data)?;
     info!(
         "Combine font '{}' loaded with {} glyphs",
         combine_font.name(),
@@ -86,7 +91,7 @@ fn run(args: &args::ExtendFontArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     // Copy missing glyphs
     debug!("Starting glyph copy process");
-    let extended_font_data = glyph_copier::copy_missing_glyphs(
+    let extended_font_data = copy_missing_glyphs(
         &src_font_data,
         &combine_font_data,
         &src_font,

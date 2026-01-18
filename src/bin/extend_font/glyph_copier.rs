@@ -1,13 +1,13 @@
+use crate::font_subsetter::FontSubsetter;
 /// Glyph copying module
 ///
 /// Core functionality for copying missing glyphs from a combine font to a source font.
 /// Handles font weight conversion for variable-to-fixed weight scenarios.
-
 use crate::font_utils::FontInfo;
+use crate::glyph_copier_impl;
 use log::{debug, info, warn};
 use skrifa::MetadataProvider;
 use std::collections::{HashMap, HashSet};
-
 
 /// Copy missing glyphs from combine font to source font
 ///
@@ -54,10 +54,7 @@ pub fn copy_missing_glyphs(
         return Ok(src_font_data.to_vec());
     }
 
-    info!(
-        "Found {} missing glyphs to copy",
-        missing_glyphs.len()
-    );
+    info!("Found {} missing glyphs to copy", missing_glyphs.len());
 
     // Analyze weight conversion requirements
     let weight_conversion = WeightConversionInfo::from_fonts(src_font, combine_font);
@@ -78,18 +75,13 @@ pub fn copy_missing_glyphs(
                 "unchanged"
             }
         );
-        debug!(
-            "This conversion requires adjusting glyph metrics and outlines"
-        );
+        debug!("This conversion requires adjusting glyph metrics and outlines");
     } else {
         debug!("No weight conversion needed");
     }
 
     // Extract glyph information from combine font for missing codepoints
-    let missing_glyph_info = extract_missing_glyph_info(
-        combine_font_data,
-        &missing_glyphs,
-    )?;
+    let missing_glyph_info = extract_missing_glyph_info(combine_font_data, &missing_glyphs)?;
 
     debug!(
         "Successfully extracted info for {} glyphs from combine font",
@@ -192,12 +184,9 @@ pub struct GlyphInfo {
 /// 3. Get metrics from hmtx/vmtx tables
 /// 4. Return structured glyph information
 #[allow(dead_code)]
-pub fn extract_glyph_info(
-    font_data: &[u8],
-    codepoint: u32,
-) -> Option<GlyphInfo> {
+pub fn extract_glyph_info(font_data: &[u8], codepoint: u32) -> Option<GlyphInfo> {
     debug!("Extracting glyph info for codepoint: U+{:04X}", codepoint);
-    
+
     // Try to get basic information using skrifa
     if let Ok(font_ref) = skrifa::FontRef::new(font_data) {
         let charmap = font_ref.charmap();
@@ -211,7 +200,7 @@ pub fn extract_glyph_info(
             });
         }
     }
-    
+
     None
 }
 
@@ -253,9 +242,9 @@ fn extract_missing_glyph_info(
             // Find the glyph ID for this codepoint
             if let Some(glyph_id) = charmap.map(codepoint) {
                 let glyph_id_u32 = glyph_id.to_u32();
-                
+
                 // Try to extract metrics and outline info
-                let (bbox, has_outlines, advance_width) = 
+                let (bbox, has_outlines, advance_width) =
                     extract_glyph_metrics(&font_ref, glyph_id_u32);
 
                 glyph_infos.push(GlyphInfo {
@@ -265,9 +254,9 @@ fn extract_missing_glyph_info(
                     has_outlines,
                     advance_width,
                 });
-                
+
                 extracted_count += 1;
-                
+
                 if extracted_count % 100 == 0 {
                     debug!("Extracted info for {} glyphs...", extracted_count);
                 }
@@ -304,7 +293,7 @@ fn extract_glyph_metrics(
     // 2. Extract bounding box coordinates
     // 3. Query hmtx table for advance width
     // 4. Determine if glyph has composite or simple outlines
-    
+
     // For now, use conservative defaults:
     let bbox = None; // Would require glyf/CFF table parsing with skrifa
     let has_outlines = true; // Assume outline data exists if glyph is in charmap
@@ -318,117 +307,42 @@ fn extract_glyph_metrics(
 /// # Arguments
 ///
 /// * `src_font_data` - Raw bytes of the source font
-/// * `_combine_font_data` - Raw bytes of the combine font
+/// * `combine_font_data` - Raw bytes of the combine font
 /// * `missing_glyph_info` - Information about glyphs to copy
 /// * `needs_weight_conversion` - Whether weight conversion is needed
 ///
 /// # Returns
 ///
 /// * `Result<Vec<u8>, Box<dyn std::error::Error>>` - Modified font data
-///
-/// # Implementation Notes
-///
-/// This is a comprehensive glyph merging implementation that:
-/// 1. Parses both fonts with write-fonts
-/// 2. Updates the character map (cmap) to include new codepoint mappings
-/// 3. Copies glyph outlines from combine font to source font
-/// 4. Updates metrics tables (hmtx/vmtx) for new glyphs
-/// 5. Applies weight conversion scaling if needed
-/// 6. Reconstructs the modified font
-///
-/// # Current Status
-///
-/// Foundation is in place but requires further work to:
-/// - Copy actual glyph outline data
-/// - Handle composite glyphs properly
-/// - Apply weight conversion to outlines
-/// - Validate font reconstruction
 fn merge_glyphs_into_font(
     src_font_data: &[u8],
-    _combine_font_data: &[u8],
+    combine_font_data: &[u8],
     missing_glyph_info: &[GlyphInfo],
     needs_weight_conversion: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     debug!(
-        "Merging {} glyphs into source font",
+        "Creating real glyph fusion with {} missing glyphs",
         missing_glyph_info.len()
     );
 
     if missing_glyph_info.is_empty() {
-        debug!("No glyphs to merge, returning source font unchanged");
+        debug!("No glyphs to add, returning source font unchanged");
         return Ok(src_font_data.to_vec());
     }
 
-    // Build a map of codepoint -> glyph_id for efficient lookup
-    let codepoint_to_glyph: HashMap<u32, u32> = missing_glyph_info
+    // Convert glyph info to (codepoint, glyph_id) tuples for the real implementation
+    let glyphs_to_copy: Vec<(u32, u16)> = missing_glyph_info
         .iter()
-        .map(|g| (g.codepoint, g.glyph_id))
+        .map(|g| (g.codepoint, g.glyph_id as u16))
         .collect();
 
     debug!(
-        "Built codepoint to glyph map with {} entries",
-        codepoint_to_glyph.len()
+        "Calling real fusion implementation with {} glyphs",
+        glyphs_to_copy.len()
     );
 
-    // Log weight conversion info if needed
-    if needs_weight_conversion {
-        debug!("Applying weight conversion during glyph merge");
-        debug!("This requires:");
-        debug!("  1. Scaling outline coordinates");
-        debug!("  2. Adjusting advance widths");
-        debug!("  3. Updating bounding boxes");
-    }
-
-    // Log what glyphs would be copied
-    let mut logged_count = 0;
-    for glyph in missing_glyph_info {
-        if logged_count < 10 {
-            debug!(
-                "  Would copy glyph: U+{:04X} (glyph_id={}) from combine font",
-                glyph.codepoint, glyph.glyph_id
-            );
-            logged_count += 1;
-        }
-    }
-    if missing_glyph_info.len() > 10 {
-        debug!(
-            "  ... and {} more glyphs",
-            missing_glyph_info.len() - 10
-        );
-    }
-
-    // Implementation Strategy (Full implementation requires):
-    // 
-    // 1. Parse source font with read-fonts for analysis
-    // 2. Use write-fonts to reconstruct:
-    //    - Update cmap table with new (codepoint -> glyph_id) mappings
-    //    - Add new glyphs to glyf/CFF tables
-    //    - Update hmtx table with advance widths
-    //    - Update head/hhea tables with new metrics
-    // 3. Copy glyph outlines from combine_font
-    // 4. If weight conversion needed:
-    //    - Scale outline coordinates by weight_scale_factor
-    //    - Scale advance widths by weight_scale_factor
-    // 5. Serialize modified font back to bytes
-
-    info!(
-        "Successfully prepared {} glyphs for merging",
-        missing_glyph_info.len()
-    );
-
-    // Phase 1: Analysis and logging only
-    // Returns source font unchanged as placeholder for full implementation
-    // 
-    // The full implementation would use write-fonts to actually modify the font data.
-    // This requires:
-    // - Understanding the font table format (glyf, CFF, cmap, hmtx, etc.)
-    // - Implementing glyph outline copying with proper indexing
-    // - Handling composite glyphs and references
-    // - Managing glyph IDs and character map entries
-    //
-    // For now, we log what would be done and return the source unchanged.
-    
-    Ok(src_font_data.to_vec())
+    // Use the real glyph copying implementation with GlyfLocaBuilder + Cmap::from_mappings
+    glyph_copier_impl::copy_glyphs(src_font_data, combine_font_data, &glyphs_to_copy)
 }
 
 #[cfg(test)]
@@ -459,7 +373,10 @@ mod tests {
         let scale_factor = 1.0 + (diff * 0.15);
 
         assert!(needs_conversion);
-        assert!(scale_factor > 1.0, "Scale factor should expand for normal→bold");
+        assert!(
+            scale_factor > 1.0,
+            "Scale factor should expand for normal→bold"
+        );
         // 1.0 + (3.0 * 0.15) = 1.45, allowing for float precision
         assert!((scale_factor - 1.45).abs() < 0.001);
     }
@@ -476,7 +393,10 @@ mod tests {
         let scale_factor = 1.0 + (diff * 0.15);
 
         assert!(needs_conversion);
-        assert!(scale_factor < 1.0, "Scale factor should shrink for bold→normal");
+        assert!(
+            scale_factor < 1.0,
+            "Scale factor should shrink for bold→normal"
+        );
         // 1.0 + (-3.0 * 0.15) = 0.55, allowing for float precision
         assert!((scale_factor - 0.55).abs() < 0.001);
     }
@@ -526,15 +446,13 @@ mod tests {
     /// Test codepoint to glyph ID mapping
     #[test]
     fn test_codepoint_to_glyph_map_single() {
-        let glyph_info = vec![
-            GlyphInfo {
-                codepoint: 0x1F600,
-                glyph_id: 100u32,
-                bbox: None,
-                has_outlines: true,
-                advance_width: None,
-            }
-        ];
+        let glyph_info = vec![GlyphInfo {
+            codepoint: 0x1F600,
+            glyph_id: 100u32,
+            bbox: None,
+            has_outlines: true,
+            advance_width: None,
+        }];
 
         let map: HashMap<u32, u32> = glyph_info
             .iter()
@@ -587,11 +505,11 @@ mod tests {
     #[test]
     fn test_scale_factor_calculation() {
         let test_cases = vec![
-            (300u16, 400u16, 0.85),    // Light to Normal: 1 + (-1 * 0.15) = 0.85
-            (400u16, 400u16, 1.0),     // Normal to Normal: no change
-            (400u16, 700u16, 0.55),    // Normal to Bold: 1 + (-3 * 0.15) = 0.55
-            (700u16, 400u16, 1.45),    // Bold to Normal: 1 + (3 * 0.15) = 1.45
-            (900u16, 400u16, 1.75),    // Extra Bold to Normal: 1 + (5 * 0.15) = 1.75
+            (300u16, 400u16, 0.85), // Light to Normal: 1 + (-1 * 0.15) = 0.85
+            (400u16, 400u16, 1.0),  // Normal to Normal: no change
+            (400u16, 700u16, 0.55), // Normal to Bold: 1 + (-3 * 0.15) = 0.55
+            (700u16, 400u16, 1.45), // Bold to Normal: 1 + (3 * 0.15) = 1.45
+            (900u16, 400u16, 1.75), // Extra Bold to Normal: 1 + (5 * 0.15) = 1.75
         ];
 
         for (src_weight, combine_weight, expected) in test_cases {
@@ -602,7 +520,10 @@ mod tests {
             assert!(
                 (scale_factor - expected).abs() < 0.01,
                 "Scale factor for {}→{} should be {}, got {}",
-                src_weight, combine_weight, expected, scale_factor
+                src_weight,
+                combine_weight,
+                expected,
+                scale_factor
             );
         }
     }
@@ -619,7 +540,7 @@ mod tests {
         // Should be: 0.55 and 1.45
         // Product: 0.55 * 1.45 = 0.7975 (not exactly 1.0, but related by scaling direction)
         let product: f32 = scale_400_700 * scale_700_400;
-        
+
         // Verify the relationship is reasonable
         assert!(product > 0.7, "Product should be reasonable");
         assert!(product < 1.0, "Shrink * Expand should be < 1.0");
