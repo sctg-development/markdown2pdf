@@ -3,7 +3,6 @@
 /// Tests the font extension functionality with real font files,
 /// including missing glyph detection, weight conversion detection,
 /// and directory creation.
-
 use std::path::Path;
 use std::process::Command;
 
@@ -112,12 +111,7 @@ fn test_inplace_modification() {
     let src_font = "fonts/DejaVuSans.ttf";
     let combine_font = "fonts/NotoEmoji-VariableFont_wght.ttf";
 
-    let (_, stderr) = run_extend_font(&[
-        "--src-font",
-        src_font,
-        "--combine-font",
-        combine_font,
-    ]);
+    let (_, stderr) = run_extend_font(&["--src-font", src_font, "--combine-font", combine_font]);
 
     // Should indicate in-place modification
     assert!(
@@ -200,13 +194,7 @@ fn test_same_source_and_combine_font() {
 
     let font = "fonts/DejaVuSans.ttf";
 
-    let (_, stderr) = run_extend_font(&[
-        "--src-font",
-        font,
-        "--combine-font",
-        font,
-        "-vv",
-    ]);
+    let (_, stderr) = run_extend_font(&["--src-font", font, "--combine-font", font, "-vv"]);
 
     // Should report no missing glyphs
     assert!(

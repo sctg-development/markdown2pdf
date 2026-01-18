@@ -40,7 +40,10 @@ mod tests {
             };
 
             assert!(needs_conversion);
-            assert!(scale_factor < 1.0, "Scale factor should be < 1.0 for bold→normal");
+            assert!(
+                scale_factor < 1.0,
+                "Scale factor should be < 1.0 for bold→normal"
+            );
             assert!(scale_factor > 0.95, "Scale factor should not be too small");
         }
 
@@ -61,7 +64,10 @@ mod tests {
             };
 
             assert!(needs_conversion);
-            assert!(scale_factor > 1.0, "Scale factor should be > 1.0 for normal→bold");
+            assert!(
+                scale_factor > 1.0,
+                "Scale factor should be > 1.0 for normal→bold"
+            );
             assert!(scale_factor < 1.05, "Scale factor should not be too large");
         }
 
@@ -86,7 +92,10 @@ mod tests {
 
             let needs_conversion = is_variable && src_weight != combine_weight;
 
-            assert!(!needs_conversion, "Fixed fonts don't need weight conversion");
+            assert!(
+                !needs_conversion,
+                "Fixed fonts don't need weight conversion"
+            );
         }
     }
 
@@ -96,7 +105,7 @@ mod tests {
         #[test]
         fn test_glyph_info_creation() {
             let glyph = GlyphInfo {
-                codepoint: 0x1F600,  // 😀 grinning face
+                codepoint: 0x1F600, // 😀 grinning face
                 glyph_id: 123,
                 bbox: Some((50, 100, 450, 800)),
                 has_outlines: true,
@@ -127,10 +136,10 @@ mod tests {
         #[test]
         fn test_multiple_emoji_codepoints() {
             let emoji_glyphs = vec![
-                (0x1F600, 100),  // grinning face
-                (0x1F601, 101),  // beaming face with smiling eyes
-                (0x1F602, 102),  // face with tears of joy
-                (0x1F603, 103),  // grinning face with big eyes
+                (0x1F600, 100), // grinning face
+                (0x1F601, 101), // beaming face with smiling eyes
+                (0x1F602, 102), // face with tears of joy
+                (0x1F603, 103), // grinning face with big eyes
             ];
 
             for (codepoint, glyph_id) in emoji_glyphs {
@@ -164,15 +173,13 @@ mod tests {
 
         #[test]
         fn test_codepoint_to_glyph_map_single() {
-            let glyph_info = vec![
-                GlyphInfo {
-                    codepoint: 0x1F600,
-                    glyph_id: 100,
-                    bbox: None,
-                    has_outlines: true,
-                    advance_width: None,
-                }
-            ];
+            let glyph_info = vec![GlyphInfo {
+                codepoint: 0x1F600,
+                glyph_id: 100,
+                bbox: None,
+                has_outlines: true,
+                advance_width: None,
+            }];
 
             let map: std::collections::HashMap<u32, u32> = glyph_info
                 .iter()
@@ -251,11 +258,11 @@ mod tests {
         #[test]
         fn test_scale_factor_for_different_weights() {
             let test_cases = vec![
-                (300, 400, 0.98),  // Light to Normal
-                (400, 400, 1.00),  // Normal to Normal
-                (400, 700, 0.96),  // Normal to Bold
-                (700, 400, 1.04),  // Bold to Normal
-                (900, 400, 1.07),  // Extra Bold to Normal
+                (300, 400, 0.98), // Light to Normal
+                (400, 400, 1.00), // Normal to Normal
+                (400, 700, 0.96), // Normal to Bold
+                (700, 400, 1.04), // Bold to Normal
+                (900, 400, 1.07), // Extra Bold to Normal
             ];
 
             for (src_weight, combine_weight, _expected_range) in test_cases {
@@ -279,7 +286,10 @@ mod tests {
 
             // Should be reciprocals (approximately)
             let product = scale_400_700 * scale_700_400;
-            assert!((product - 1.0).abs() < 0.01, "Scale factors should be reciprocals");
+            assert!(
+                (product - 1.0).abs() < 0.01,
+                "Scale factors should be reciprocals"
+            );
         }
     }
 
@@ -313,7 +323,7 @@ mod tests {
             // Hypothetical: What if weight was 0?
             let src_weight = 0u16;
             let combine_weight = 400u16;
-            
+
             // Should handle gracefully
             let diff = (src_weight as f32 - combine_weight as f32) / 100.0;
             let scale_factor = 1.0 + (diff * 0.15);
