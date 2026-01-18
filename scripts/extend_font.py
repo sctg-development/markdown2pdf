@@ -22,7 +22,8 @@ Implementation notes:
   left out to keep implementation focused and testable for common TTF cases used by tests.
 - Copies composite glyphs recursively so components are present.
 
-The code is designed to be well-documented and unit-tested (see tests/extend_font_test.py).
+(c) 2026 Ronan Le Meillat - SCTG Development
+MIT License
 """
 
 from __future__ import annotations
