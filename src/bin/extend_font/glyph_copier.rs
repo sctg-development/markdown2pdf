@@ -51,6 +51,12 @@ pub fn copy_missing_glyphs(
 
     if missing_glyphs.is_empty() {
         info!("No missing glyphs found");
+        // Inform about weight conversion status even when there are no missing glyphs
+        if combine_font.is_variable_weight() {
+            info!("weight conversion not needed (no glyphs to convert)");
+        }
+        // Signal completion so integration tests can detect the overall process
+        info!("Glyph copy process completed");
         return Ok(src_font_data.to_vec());
     }
 

@@ -2,7 +2,6 @@
 ///
 /// This module handles creating a cmap table from a mapping of codepoints to glyph IDs.
 /// Uses OpenType cmap format 12 (segmented coverage) for full Unicode support.
-
 use byteorder::{BigEndian, WriteBytesExt};
 use log::{debug, info};
 use std::collections::BTreeMap;
@@ -20,7 +19,7 @@ pub fn build_cmap_table(
 
     // We'll build a cmap with format 4 (BMP only) for efficiency
     // For non-BMP codepoints, add format 12 subtable
-    
+
     let mut cmap_data = Vec::new();
     let mut cursor = Cursor::new(&mut cmap_data);
 
@@ -125,13 +124,19 @@ fn build_cmap_format4(
     segments.push((0xFFFF, 0xFFFF, 0));
 
     let seg_count = segments.len();
-    let search_range = (seg_count.next_power_of_two() as u16) << 1;
-    let entry_selector = (seg_count as u16).next_power_of_two().trailing_zeros() as u16;
-    let range_shift = (seg_count as u16) << 1 - search_range;
+    let seg_count_u16 = seg_count as u16;
+    // Compute largest power of two less than or equal to seg_count
+    let mut power = 1u16;
+    while power * 2 <= seg_count_u16 {
+        power <<= 1;
+    }
+    let search_range = power << 1;
+    let entry_selector = power.trailing_zeros() as u16;
+    let range_shift = seg_count_u16 * 2 - search_range;
 
     // Write format 4 header
     cursor.write_u16::<BigEndian>(4)?; // format
-    
+
     // Length: header + 4 arrays of seg_count entries
     let length = (14 + seg_count * 8) as u16;
     cursor.write_u16::<BigEndian>(length)?;
@@ -158,10 +163,10 @@ fn build_cmap_format4(
     // Write idDelta and idRangeOffset arrays (simplified: just store glyph IDs directly)
     // For simplicity, we use idRangeOffset approach with a glyphIdArray
     // This is complex; for now use idDelta (works if mappings are sequential)
-    
-    for (_, _, start_gid) in &segments {
+
+    for (start, _, start_gid) in &segments {
         // idDelta = start_glyph_id - start_codepoint
-        let delta = *start_gid as i16 - segments[0].0 as i16;
+        let delta = *start_gid as i16 - *start as i16;
         cursor.write_i16::<BigEndian>(delta)?;
     }
 
