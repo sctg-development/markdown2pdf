@@ -50,8 +50,8 @@ genpdfi_extended = { git = "https://github.com/sctg-development/genpdfi-extended
     "images",
     "latex",
     "mermaid",
-] } # printpdf 0.8.2
-printpdf = "0.8.2"
+] }
+printpdf = "0.9.0"
 # microtex_rs removed: LaTeX rendering delegated to genpdfi_extended when feature "latex" is enabled
 # microtex_rs = { git = "https://github.com/sctg-development/microtex_rs.git", package = "microtex_rs", features = [
 #    # "vendored-cairo",
